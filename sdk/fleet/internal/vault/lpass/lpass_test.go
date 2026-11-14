@@ -415,3 +415,10 @@ func TestSignInTrimsLPASSUser(t *testing.T) {
 		t.Fatalf("argv = %v", got)
 	}
 }
+
+func TestSignInWithoutARunnerErrors(t *testing.T) {
+	t.Setenv("LPASS_USER", "me@example.com")
+	if err := New(vault.Config{}, nil).SignIn(context.Background(), nil, io.Discard, io.Discard); err == nil {
+		t.Fatal("want error when no interactive runner is wired")
+	}
+}

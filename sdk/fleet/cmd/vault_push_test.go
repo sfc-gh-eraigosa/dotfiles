@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -331,11 +332,11 @@ func TestPushRefusesPartialKnownHostsWithoutFlag(t *testing.T) {
 		}
 	}
 	names, _ := e.store.List(context.Background())
-	if contains(names, "known_hosts") {
+	if slices.Contains(names, "known_hosts") {
 		t.Fatal("partial known_hosts written without --allow-partial")
 	}
 	for _, n := range []string{"key/ws1", "roster", "inventory"} {
-		if !contains(names, n) {
+		if !slices.Contains(names, n) {
 			t.Errorf("%s not written: %v", n, names)
 		}
 	}
@@ -563,6 +564,9 @@ func TestPushEncryptLocalDropsThePlaintextBackupOnceVerified(t *testing.T) {
 	if m, _ := filepath.Glob(k.path + ".bak-*"); len(m) != 0 {
 		t.Fatalf("plaintext backup left on disk: %v", m)
 	}
+	if m, _ := filepath.Glob(k.path + ".pub.bak-*"); len(m) != 0 { // PR #452 item 6
+		t.Fatalf(".pub backup left on disk: %v", m)
+	}
 	if !strings.Contains(out, "the vault holds the recovery copy") {
 		t.Fatalf("missing recovery note:\n%s", out)
 	}
@@ -618,5 +622,102 @@ func TestPushDeclinedWithWithheldKnownHostsExitsNonZero(t *testing.T) {
 	}
 	if puts(e.store.Calls) != 0 {
 		t.Fatal("wrote after 'n'")
+	}
+}
+
+// PR #452 item 1.
+func TestPushHandsSignInTheRealStdinFile(t *testing.T) {
+	e, _ := pushEnv(t, pushTestPass)
+	st := &stubStore{Fake: e.store, readyErrs: []error{vault.ErrSignedOut, nil}}
+	openVault = func(vault.Config) (vault.Store, error) { return st, nil }
+	f := stdinFile(t, "y\n"+pushTestPass+"\n")
+	c := newVaultCmd()
+	var out strings.Builder
+	c.SetOut(&out)
+	c.SetErr(&out)
+	c.SetIn(f)
+	c.SetArgs([]string{"push"})
+	if err := c.Execute(); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if got, ok := st.signInStdin.(*os.File); !ok || got != f {
+		t.Fatalf("SignIn got %T, want the *os.File itself", st.signInStdin)
+	}
+	// the prompt reader built after sign-in still read the answers
+	if n := puts(e.store.Calls); n != 4 {
+		t.Fatalf("wrote %d item(s), want 4\n%s", n, out.String())
+	}
+}
+
+// PR #452 item 2: right after a push, status agrees there is nothing to push.
+func TestStatusAgreesWithPushRightAfterAPush(t *testing.T) {
+	_, _ = pushEnv(t, pushTestPass)
+	fleetInventory = func() (vault.Inventory, error) {
+		return vault.Inventory{Config: "Host a  #fleet\n    HostName 10.0.0.1\n    User pi\n    ProxyCommand nc %h %p\n\nHost b  #fleet\n    HostName 10.0.0.2\n"}, nil
+	}
+	if out, err := runVault(t, "y\n"+pushTestPass+"\n", "push"); err != nil {
+		t.Fatalf("push: %v\n%s", err, out)
+	}
+	out, err := runVault(t, "", "status")
+	if err != nil {
+		t.Fatalf("status: %v\n%s", err, out)
+	}
+	for _, want := range []string{"inventory: in vault, in sync", "known_hosts: in vault, 0 lines differ"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if out, _ := runVault(t, "", "push"); !strings.Contains(out, "nothing to push") {
+		t.Fatalf("push disagrees:\n%s", out)
+	}
+}
+
+// PR #452 item 3: a fresh machine (no fleet alias resolves) can still push
+// with --allow-partial; every vault known_hosts line is kept.
+func TestPushAllowPartialOnAFreshHostKeepsEveryVaultLine(t *testing.T) {
+	e, _ := pushEnv(t, pushTestPass)
+	vaultLines := []string{"a ssh-ed25519 AAAAKEYA", "b ssh-ed25519 AAAAKEYB", "old ssh-ed25519 AAAAOLD"}
+	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: vaultLines})
+	unresolved := []unresolvedHost{{Alias: "a", Reason: "no known_hosts entry", Names: []string{"a"}}, {Alias: "b", Reason: "no known_hosts entry", Names: []string{"b"}}}
+	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
+		return vault.KnownHosts{}, unresolved, fmt.Errorf("%w (first: a: no known_hosts entry)", errNoAliasResolved)
+	}
+
+	out, err := runVault(t, "y\n"+pushTestPass+"\n", "push")
+	if err == nil || !strings.Contains(out, "known_hosts: NOT pushed") || !strings.Contains(out, "--allow-partial") {
+		t.Fatalf("without the flag: want withheld + non-zero: %v\n%s", err, out)
+	}
+
+	out, err = runVault(t, "", "push", "--allow-partial")
+	if err != nil {
+		t.Fatalf("--allow-partial: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "keeps all 3 vault line(s)") {
+		t.Fatalf("does not report the kept lines:\n%s", out)
+	}
+	kh := getItem[vault.KnownHosts](t, e.store, "known_hosts")
+	if strings.Join(kh.Lines, "|") != strings.Join(vaultLines, "|") {
+		t.Fatalf("vault lines changed: %v", kh.Lines)
+	}
+}
+
+// PR #452 item 8: push says it never removes hosts.
+func TestPushSaysItNeverRemovesHosts(t *testing.T) {
+	_, _ = pushEnv(t, pushTestPass)
+	const note = "push adds and updates hosts; it never removes them from the vault"
+	out, err := runVault(t, "n\n", "push")
+	if err != nil || !strings.Contains(out, note) {
+		t.Fatalf("diff lacks the note: %v\n%s", err, out)
+	}
+	if !strings.Contains(newVaultPushCmd().Long, note) {
+		t.Fatal("help lacks the note")
+	}
+}
+
+// PR #452 item 7: one symmetric-difference helper.
+func TestLineSetDiff(t *testing.T) {
+	add, del := lineSetDiff([]string{"a", "b", "b", "c"}, []string{"c", "d"})
+	if add != 2 || del != 1 {
+		t.Fatalf("add=%d del=%d", add, del)
 	}
 }

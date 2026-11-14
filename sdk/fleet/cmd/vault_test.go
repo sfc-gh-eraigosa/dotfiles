@@ -104,19 +104,103 @@ func TestSetupDoesNotWriteConfigWhenNotReady(t *testing.T) {
 	}
 }
 
-func TestSetupOpIsNotInThisBuild(t *testing.T) {
+// PR #452 item 4: the install hint names each provider's own CLI.
+func TestSetupInstallHintPerProvider(t *testing.T) {
+	for provider, want := range map[string]string{"lpass": "lastpass-cli", "op": "1password-cli"} {
+		e := vaultEnv(t, true)
+		st := &stubStore{Fake: e.store, readyErrs: []error{vault.ErrNotInstalled}}
+		openVault = func(vault.Config) (vault.Store, error) { return st, nil }
+		out, err := runVault(t, "", "setup", "--provider", provider)
+		if err == nil || !strings.Contains(out, want) {
+			t.Errorf("%s: err=%v out=%s", provider, err, out)
+		}
+		if other := map[string]string{"lpass": "1password-cli", "op": "lastpass-cli"}[provider]; strings.Contains(out, other) {
+			t.Errorf("%s: names the other CLI: %s", provider, out)
+		}
+		if _, err := os.Stat(vaultConfigPath()); err == nil {
+			t.Errorf("%s: config written while not installed", provider)
+		}
+	}
+}
+
+// PR #452 item 4: op is in this build; setup says it is unconfirmed live and proceeds.
+func TestSetupOpIsUnconfirmedLiveButProceeds(t *testing.T) {
 	vaultEnv(t, true)
-	openVault = func(vault.Config) (vault.Store, error) { return nil, vault.ErrNotInstalled }
 	out, err := runVault(t, "op\n", "setup")
-	if err == nil || !strings.Contains(out, "1Password support is not in this build") {
-		t.Fatalf("err=%v out=%s", err, out)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "1Password support is unconfirmed live (no account tested)") {
+		t.Fatalf("missing unconfirmed note:\n%s", out)
+	}
+	if cfg, ok, err := loadVaultConfig(vaultConfigPath()); err != nil || !ok || cfg.Provider != "op" {
+		t.Fatalf("cfg=%+v ok=%v err=%v", cfg, ok, err)
+	}
+}
+
+// PR #452 item 1: the vendor sign-in child gets the command's real *os.File,
+// never a bufio.Reader wrapped around it.
+func TestSetupHandsSignInTheRealStdinFile(t *testing.T) {
+	e := vaultEnv(t, true)
+	st := &stubStore{Fake: e.store, readyErrs: []error{vault.ErrSignedOut, nil}}
+	openVault = func(vault.Config) (vault.Store, error) { return st, nil }
+	f := stdinFile(t, "")
+	c := newVaultCmd()
+	c.SetOut(io.Discard)
+	c.SetErr(io.Discard)
+	c.SetIn(f)
+	c.SetArgs([]string{"setup", "--provider", "lpass"})
+	if err := c.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := st.signInStdin.(*os.File); !ok || got != f {
+		t.Fatalf("SignIn got %T, want the *os.File itself", st.signInStdin)
+	}
+}
+
+func stdinFile(t *testing.T, content string) *os.File {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "stdin")
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+	return f
+}
+
+// PR #452 item 5: an item that exists but cannot be read is not "not in vault".
+func TestStatusSaysUnreadableNotAbsent(t *testing.T) {
+	e := vaultEnv(t, true)
+	configure(t, "ws1")
+	if _, err := e.store.Put(context.Background(), "inventory", vault.Secret("garbage"), ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.store.Put(context.Background(), "known_hosts", vault.Secret("garbage"), ""); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runVault(t, "", "status")
+	if err == nil {
+		t.Fatalf("want non-zero exit:\n%s", out)
+	}
+	for _, want := range []string{"inventory: unreadable: ", "known_hosts: unreadable: "} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "inventory: not in vault") || strings.Contains(out, "known_hosts: not in vault") {
+		t.Fatalf("an unreadable item reported as absent:\n%s", out)
 	}
 }
 
 type stubStore struct {
 	*vault.Fake
-	readyErrs []error
-	signIns   int
+	readyErrs   []error
+	signIns     int
+	signInStdin io.Reader
 }
 
 func (s *stubStore) Ready(context.Context) error {
@@ -130,6 +214,7 @@ func (s *stubStore) Ready(context.Context) error {
 
 func (s *stubStore) SignIn(ctx context.Context, in io.Reader, out, errw io.Writer) error {
 	s.signIns++
+	s.signInStdin = in
 	return nil
 }
 
@@ -230,7 +315,7 @@ func TestStatusReportsEachFacet(t *testing.T) {
 		"vault has key/ws1",
 		"roster: active",
 		"loaded in agent",
-		"inventory: in vault, 2 hosts differ",
+		"inventory: in vault, 1 host(s) to push",
 		"known_hosts: in vault, 2 lines differ",
 	} {
 		if !strings.Contains(out, want) {
@@ -383,8 +468,12 @@ func TestKnownHostsKeygenMissingIsAnError(t *testing.T) {
 
 func TestKnownHostsEveryAliasUnresolvableIsAnError(t *testing.T) {
 	x := func(string, string, ...string) (string, error) { return "", errors.New("not found") }
-	if _, _, err := knownHostsFor(x, []string{"a", "b"}); err == nil {
-		t.Fatal("want error")
+	_, bad, err := knownHostsFor(x, []string{"a", "b"})
+	if !errors.Is(err, errNoAliasResolved) {
+		t.Fatalf("want errNoAliasResolved, got %v", err)
+	}
+	if len(bad) != 2 || bad[0].Alias != "a" || bad[1].Alias != "b" {
+		t.Fatalf("unresolved hosts not returned with the error: %v", bad)
 	}
 	if k, _, err := knownHostsFor(x, nil); err != nil || len(k.Lines) != 0 {
 		t.Fatalf("no aliases is fine: %v %v", k, err)
