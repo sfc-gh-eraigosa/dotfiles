@@ -53,11 +53,10 @@ assert_grep "BASE_DIR is exported" \
 
 # === 3. Idempotency shape ===
 # An installer that re-runs cleanly must guard symlink creation: the
-# canonical pattern checks `-L` AND `readlink == expected target`
-# before recreating. install.sh uses this for ~/opt (lines around the
-# `Ensure ~/opt is a symlink to the repo's opt directory` block).
-# #448 compares PHYSICAL paths (cd -P), not readlink text: on a Mac with
-# ~/git -> ~/Documents/git a correct link has two spellings.
+# canonical pattern checks `-L` AND that the link resolves to this checkout
+# before recreating. install.sh compares `cd -P` physical paths
+# (_opt_current vs _opt_target), not `readlink`, so a link spelled through
+# another symlinked path (~/git -> elsewhere) still counts as correct.
 assert_grep "symlink idempotency guard present" \
     '\[[[:space:]]+-L[[:space:]]+"\$\{HOME\}/opt"[[:space:]]+\][[:space:]]+&&.*"\$\{_opt_current\}"[[:space:]]+=[[:space:]]+"\$\{_opt_target\}"' \
     "$INSTALL"
@@ -108,8 +107,14 @@ assert_grep "install.sh carries the self-sufficient PATH block" \
     '^# --- Self-sufficient PATH' "$INSTALL"
 
 # run_path_block <initial PATH> -> resulting PATH, with HOME pinned to a fixture.
+# Resolve bash up front: the fixture PATHs need not contain its dir (macOS
+# keeps it in /bin, which '/fixture/home/opt/bin:/usr/bin' lacks).
+BASH_BIN="$(command -v bash)"
+# INSTALL_BREW_DIRS defaults to a dir with no brew, so the host's real
+# Homebrew never leaks into the expected PATHs; pass $2 to offer one.
 run_path_block() {
-    env HOME=/fixture/home PATH="$1" bash -c "$PATH_BLOCK"'; printf %s "$PATH"'
+    env HOME=/fixture/home PATH="$1" INSTALL_BREW_DIRS="${2:-/nonexistent}" \
+        "$BASH_BIN" -c "$PATH_BLOCK"'; printf %s "$PATH"'
 }
 
 assert_eq "$(run_path_block '/usr/local/bin:/usr/bin:/bin')" \
@@ -138,6 +143,22 @@ assert_eq "$(run_path_block '/fixture/home/opt/bin:/usr/bin')" \
 assert_eq "$(run_path_block '/fixture/home/opt/bin-extra:/usr/bin')" \
     "/fixture/home/opt/bin:/fixture/home/.local/bin:/fixture/home/opt/bin-extra:/usr/bin" \
     "substring match does not count as present"
+
+# Homebrew's bin joins a non-login PATH (fleet's ssh session) at the END, so it
+# only fills gaps and never shadows ~/opt/bin, even one already on PATH; and only
+# a dir that actually holds `brew` counts.
+BREW_FIX="$(mktemp -d)"
+trap 'rm -rf "$BREW_FIX"' EXIT
+mkdir -p "$BREW_FIX/bin" && : > "$BREW_FIX/bin/brew" && chmod +x "$BREW_FIX/bin/brew"
+assert_eq "$(run_path_block '/usr/bin:/bin' "/nonexistent/bin $BREW_FIX/bin")" \
+    "/fixture/home/opt/bin:/fixture/home/.local/bin:/usr/bin:/bin:$BREW_FIX/bin" \
+    "brew dir is appended, behind ~/opt/bin, ~/.local/bin and the system dirs"
+assert_eq "$(run_path_block '/fixture/home/opt/bin:/usr/bin' "$BREW_FIX/bin")" \
+    "/fixture/home/.local/bin:/fixture/home/opt/bin:/usr/bin:$BREW_FIX/bin" \
+    "brew dir never lands ahead of an ~/opt/bin the caller already had"
+assert_eq "$(run_path_block "$BREW_FIX/bin:/usr/bin" "$BREW_FIX/bin")" \
+    "/fixture/home/opt/bin:/fixture/home/.local/bin:$BREW_FIX/bin:/usr/bin" \
+    "brew dir already on PATH is not duplicated"
 
 # The block must precede the first consumer of an installed tool: the gff
 # early-export probes `command -v gff`, and gff lives in ~/opt/bin.

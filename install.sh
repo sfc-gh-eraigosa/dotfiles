@@ -32,6 +32,24 @@ export BASE_DIR
 # resolves ahead of ~/.local/bin, the same order a login shell gets from
 # .profile. The reverse let an upstream installer's stale copy in ~/.local/bin
 # shadow the managed ~/opt/bin binary for the whole run.
+#
+# Homebrew is the same story: a non-login ssh shell on macOS has only
+# /usr/bin:/bin:/usr/sbin:/sbin, so `brew` (/usr/local/bin on Intel,
+# /opt/homebrew/bin on Apple silicon) and everything it installed read as
+# missing — pkg-install-brew, lastpass, 1password, gh and the Nerd Font setup
+# all failed, and Claude Code fell back to npm on whatever old node nvm had.
+# APPENDED, not prepended: it only fills in what is missing, so it never
+# shadows ~/opt/bin (even one the caller already had on PATH) or, on Linux,
+# the system toolchain under /usr/bin. First dir holding `brew` wins.
+# INSTALL_BREW_DIRS overrides the candidate list (install_test.sh fixtures).
+for _ip_dir in ${INSTALL_BREW_DIRS:-/opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin}; do
+  [ -x "${_ip_dir}/brew" ] || continue
+  case ":${PATH}:" in
+    *":${_ip_dir}:"*) ;;
+    *) PATH="${PATH}:${_ip_dir}" ;;
+  esac
+  break
+done
 for _ip_dir in "${HOME}/.local/bin" "${HOME}/opt/bin"; do
   case ":${PATH}:" in
     *":${_ip_dir}:"*) ;;                    # already present — don't duplicate
@@ -391,12 +409,15 @@ else
     # Compare against the PASSWD entry, not $SHELL. $SHELL is frozen at login,
     # so after a chsh it stays stale for the life of the session — testing it
     # re-runs `sudo chsh` on every install until the user logs out.
-    # (macOS has no getent; fall back to $SHELL there.)
+    # macOS has no getent: ask Directory Services (dscl), which is the passwd
+    # entry there. $SHELL is only the last resort — over fleet's ssh session it
+    # did not match and `sudo chsh` re-ran on every install.
     if command -v getent &> /dev/null; then
       CURRENT_LOGIN_SHELL="$(getent passwd "${USER:-$(id -un)}" | cut -d: -f7)"
-    else
-      CURRENT_LOGIN_SHELL="$SHELL"
+    elif command -v dscl &> /dev/null; then
+      CURRENT_LOGIN_SHELL="$(dscl . -read "/Users/${USER:-$(id -un)}" UserShell 2>/dev/null | awk '{print $2}')"
     fi
+    [ -n "${CURRENT_LOGIN_SHELL:-}" ] || CURRENT_LOGIN_SHELL="$SHELL"
     if [ "$CURRENT_LOGIN_SHELL" != "$ZSH_PATH" ]; then
       echo "Changing default shell to zsh ($ZSH_PATH)..."
       # ${USER:-$(id -un)} so chsh still gets a real name in non-login/root shells.
@@ -619,9 +640,11 @@ else
   if [ ! -d "${HOME}/.goenv" ]; then
     echo "Installing goenv..."
     git clone https://github.com/syndbg/goenv.git "${HOME}/.goenv"
-  else
+  elif [ -d "${HOME}/.goenv/.git" ]; then
     echo "Updating goenv..."
     (cd "${HOME}/.goenv" && git pull)
+  else
+    echo "${HOME}/.goenv is not a git clone (Homebrew's goenv root?); leaving it as is."
   fi
 fi
 
@@ -762,9 +785,11 @@ else
   if [ ! -d "${HOME}/.pyenv" ]; then
     echo "Installing pyenv..."
     git clone https://github.com/pyenv/pyenv.git "${HOME}/.pyenv"
-  else
+  elif [ -d "${HOME}/.pyenv/.git" ]; then
     echo "Updating pyenv..."
     (cd "${HOME}/.pyenv" && git pull)
+  else
+    echo "${HOME}/.pyenv is not a git clone (Homebrew's pyenv root?); leaving it as is."
   fi
 fi
 else gff_skip_msg install.runtime.pyenv; fi
@@ -784,12 +809,14 @@ else
     # Also need ruby-build plugin for rbenv
     mkdir -p "${HOME}/.rbenv/plugins"
     git clone https://github.com/rbenv/ruby-build.git "${HOME}/.rbenv/plugins/ruby-build"
-  else
+  elif [ -d "${HOME}/.rbenv/.git" ]; then
     echo "Updating rbenv..."
     (cd "${HOME}/.rbenv" && git pull)
-    if [ -d "${HOME}/.rbenv/plugins/ruby-build" ]; then
+    if [ -d "${HOME}/.rbenv/plugins/ruby-build/.git" ]; then
       (cd "${HOME}/.rbenv/plugins/ruby-build" && git pull)
     fi
+  else
+    echo "${HOME}/.rbenv is not a git clone (Homebrew's rbenv root?); leaving it as is."
   fi
 fi
 else gff_skip_msg install.runtime.rbenv; fi
