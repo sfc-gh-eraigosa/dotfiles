@@ -489,9 +489,15 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   (`canAuthorize`), and the status hint, scan hint, TUI tip and first-run onboarding all
   name `fleet keys enroll <selfDest()>` — to be run on a machine that already has access.
   Every add to an `authorized_keys` (sync, enroll, onboarding) goes through ONE builder,
-  `appendKeyCmd`: append-only, needle-matched on type+blob (comment ignored), backup
-  before write, newline-safe, quoted for sh and zsh. Pinned by the `TestAppendKeyCmd*`,
-  `TestEnroll*` and `TestKeysOnly*` tests.
+  `appendKeyCmd`: append-only, needle-matched on type+blob (comment, spacing and CRLF
+  ignored), backup before write, newline-safe, and a key present only behind options is
+  reported `restricted`, never widened. Its twin `revokeKeyCmd` (`keys delete`) matches
+  the same way ON the host — never by echoing a displayed line back through the shell —
+  and fails unless the key is verifiably gone. Remote builders run as `posixSh(...)`
+  (`sh -c '<cmd>'`) so a fish/tcsh login shell cannot break them, and their awk avoids
+  `!` and POSIX classes (tcsh, mawk 1.3.3). Pinned by the `TestAppendKeyCmd*`,
+  `TestRevoke*`, `TestRemoteBuildersRunUnderShFromAnyLoginShell`, `TestEnroll*` and
+  `TestKeysOnly*` tests.
 - **An empty config is never backed up.** `writeConfig` skips the backup when the old file
   is empty/whitespace: onboarding creates it empty seconds before the scan writes it, and
   the 0-byte `config.bak-*` read like lost data. Pinned by

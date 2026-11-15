@@ -160,7 +160,9 @@ func reportIdentity(cmd *cobra.Command) {
 		return
 	}
 	fmt.Fprintln(out, "no SSH key pair found in ~/.ssh — hosts will report auth-failed until one exists.")
-	if !askYesNo(cmd, "generate ~/.ssh/id_ed25519 now?") {
+	// The question names both writes: the key, and its line in this
+	// machine's authorized_keys (newKeyNextSteps) — no silent second change.
+	if !askYesNo(cmd, "generate ~/.ssh/id_ed25519 now, and allow it to log in to this machine (~/.ssh/authorized_keys, backed up)?") {
 		fmt.Fprintln(out, "skipped; create one later with `ssh-keygen -t ed25519`")
 		return
 	}

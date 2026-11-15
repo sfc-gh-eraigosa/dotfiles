@@ -974,6 +974,7 @@ Audit and manage `authorized_keys` across the fleet.
 fleet keys list                    # which of your public keys each host authorizes
 fleet keys sync                    # authorize your public key where it's missing
 fleet keys enroll me@10.0.0.42     # authorize ANOTHER machine's key (run where you have access)
+fleet keys enroll --pubkey new.pub laptop   # …from a copied .pub, when it runs no SSH server
 fleet keys delete old_key          # revoke one of your keys — shown first, confirm per host
 fleet keys prune                   # remove foreign keys — diff-first, confirm-per-change
 ```

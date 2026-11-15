@@ -73,20 +73,65 @@ func keyNeedle(pub string) string {
 //   - keeps every existing line — it only ever appends;
 //   - is a no-op (prints "present") when the key is already authorized under
 //     any comment, so re-runs neither grow the file nor litter backups;
+//   - is also a no-op, printing "restricted", when the key is there only
+//     behind options (from=, command=, restrict): that grant was narrowed on
+//     purpose, and appending a plain line would silently widen it;
 //   - copies a non-empty file to <file>.bak-<stamp> before touching it;
 //   - terminates an unterminated last line first, so the new key is never
 //     glued onto the previous one (which corrupts both);
 //   - prints "added" on success and exits non-zero on any failure.
 //
-// path is used inside double quotes, so it may reference $HOME.
+// path is used inside double quotes, so it may reference $HOME. Lines are
+// compared field by field (keyAwkPrologue), so CRLF and extra spaces match.
 func appendKeyCmd(path, pub, stamp string) string {
 	return fmt.Sprintf(`f="%s"; k=%s; n=%s; d=$(dirname "$f"); `+
 		`{ mkdir -p "$d" && chmod 700 "$d" && touch "$f" && chmod 600 "$f"; } || exit 1; `+
-		`if grep -v '^[[:space:]]*#' "$f" | grep -qF -- "$n"; then echo present; exit 0; fi; `+
+		`s=$(awk -v n="$n" '%s { if (index($0 " ", n " ") == 1) { p = 1; exit } if (index(" " $0 " ", " " n " ")) r = 1 } `+
+		`END { if (p) print "present"; else if (r) print "restricted" }' "$f") || exit 1; `+
+		`if [ -n "$s" ]; then echo "$s"; exit 0; fi; `+
 		`if [ -s "$f" ]; then cp -p "$f" "$f.bak-%s" || exit 1; `+
 		`if [ -n "$(tail -c 1 "$f")" ]; then echo >> "$f" || exit 1; fi; fi; `+
 		`printf '%%s\n' "$k" >> "$f" && echo added`,
-		path, shq(pub), shq(keyNeedle(pub)), stamp)
+		path, shq(pub), shq(keyNeedle(pub)), keyAwkPrologue, stamp)
+}
+
+// keyAwkPrologue is the awk prelude every authorized_keys matcher shares: it
+// keeps the original line in o, skips comments (printing them when keep is
+// set), and rebuilds $0 with single spaces and no trailing \r so a needle
+// matches however the host's file was spaced or saved. Comparisons use
+// index() with space boundaries, never a regex, so the needle is literal.
+// It avoids '!' (tcsh history-expands it even inside single quotes) and
+// POSIX classes like [[:space:]] (mawk 1.3.3 on older Debian lacks them).
+const keyAwkPrologue = `{ o = $0; sub(/\r$/, "") } /^[ \t]*#/ { if (keep) print o; next } { $1 = $1 }`
+
+// posixSh runs cmd under sh on the remote host. Remote commands reach the
+// login shell, which is fish or tcsh on some machines; the builders here are
+// POSIX sh, so they are handed to sh as one single-quoted word.
+func posixSh(cmd string) string { return "sh -c " + shq(cmd) }
+
+// revokeKeyCmd removes every non-comment line authorizing the key whose
+// type+blob is needle — whatever options or comment the line carries — after
+// backing the file up, then checks the key is really gone. It prints
+// "removed" or fails: a key that survives the rewrite is an error, never a
+// reported success. Comment lines are kept verbatim.
+func revokeKeyCmd(path, needle, stamp string) string {
+	match := `{ if (index(" " $0 " ", " " n " ")) next; print o }`
+	return fmt.Sprintf(`f="%s"; n=%s; [ -f "$f" ] || exit 1; tmp=$(mktemp) || exit 1; `+
+		`cp -p "$f" "$f.bak-%s" && awk -v n="$n" -v keep=1 '%s %s' "$f" > "$tmp" && `+
+		`cat "$tmp" > "$f" && rm -f "$tmp" && chmod 600 "$f" || { rm -f "$tmp"; exit 1; }; `+
+		`c=$(awk -v n="$n" '%s { if (index(" " $0 " ", " " n " ")) c++ } END { print c + 0 }' "$f"); `+
+		`if [ "$c" = 0 ]; then echo removed; else echo "key still present on $c line(s)" >&2; exit 1; fi`,
+		path, shq(needle), stamp, keyAwkPrologue, match, keyAwkPrologue)
+}
+
+// appendNote explains a "restricted" result, the one status that is not
+// self-describing: the key is authorized only behind options (from=,
+// command=, restrict), and fleet will not widen that grant on its own.
+func appendNote(st string) string {
+	if st == "restricted" {
+		return "restricted — authorized only with options (from=/command=); left as is, edit that line to widen it"
+	}
+	return st
 }
 
 // appendStatus reads the last word appendKeyCmd printed.
@@ -123,8 +168,18 @@ type enrollTarget struct{ Alias, Dest, Port string }
 
 // verifyCmd is run ON the new machine: one BatchMode login per target,
 // printing "OK\t<alias>" or "FAIL\t<alias>\t<last ssh stderr line>". Every
-// value is validated, then quoted, before it reaches the command line.
-func verifyCmd(ts []enrollTarget) (string, error) {
+// value is validated, then quoted, before it reaches the command line. A
+// named key (--key) is the only identity offered, so the check proves THAT
+// key and not some other one the new machine happens to hold.
+func verifyCmd(ts []enrollTarget, key string) (string, error) {
+	ident := ""
+	if key != "" {
+		key = strings.TrimSuffix(key, ".pub")
+		if !keyNameRE.MatchString(key) {
+			return "", fmt.Errorf("refusing unsafe key name %q", key)
+		}
+		ident = ` -o IdentitiesOnly=yes -i "$HOME/.ssh/` + key + `"`
+	}
 	parts := make([]string, 0, len(ts))
 	for _, t := range ts {
 		if !destRE.MatchString(t.Alias) || !destRE.MatchString(t.Dest) {
@@ -138,10 +193,10 @@ func verifyCmd(ts []enrollTarget) (string, error) {
 			port = " -p " + t.Port
 		}
 		parts = append(parts, fmt.Sprintf(
-			`if e=$(ssh -n -o BatchMode=yes -o ConnectTimeout=5%s %s true 2>&1 >/dev/null); `+
+			`if e=$(ssh -n -o BatchMode=yes -o ConnectTimeout=5%s%s %s true 2>&1 >/dev/null); `+
 				`then printf 'OK\t%%s\n' %s; `+
 				`else printf 'FAIL\t%%s\t%%s\n' %s "$(printf '%%s' "$e" | tail -n 1)"; fi`,
-			port, shq(t.Dest), shq(t.Alias), shq(t.Alias)))
+			ident, port, shq(t.Dest), shq(t.Alias), shq(t.Alias)))
 	}
 	return strings.Join(parts, "; "), nil
 }
@@ -169,21 +224,30 @@ func parseVerify(out string) []verifyResult {
 	return res
 }
 
-// enrollTargets turns this machine's fleet into targets, adding the new
-// machine itself when the fleet does not already list it, so the new key can
-// also log in to the machine that owns it (`ssh <self-alias>`).
-func enrollTargets(hosts []sshconf.Host, dest string) []enrollTarget {
+// enrollTargets turns this machine's fleet into targets. With includeSelf it
+// adds the new machine itself when the fleet does not already list it, so the
+// new key can also log in to the machine that owns it (`ssh <self-alias>`).
+//
+// A host block with no User line logs in as whatever this machine's ssh
+// resolves (a Host * default, or our own login name); the new machine's
+// login name may differ, so userOf supplies the resolved one and the
+// destination always names a user when one is known.
+func enrollTargets(hosts []sshconf.Host, dest string, userOf func(alias string) string, includeSelf bool) []enrollTarget {
 	_, destHost := splitDest(dest)
 	out := make([]enrollTarget, 0, len(hosts)+1)
-	self := false
+	self := !includeSelf
 	for _, h := range hosts {
 		addr := h.HostName
 		if addr == "" {
 			addr = h.Alias
 		}
+		u := h.User
+		if u == "" && userOf != nil {
+			u = userOf(h.Alias)
+		}
 		d := addr
-		if h.User != "" {
-			d = h.User + "@" + addr
+		if u != "" {
+			d = u + "@" + addr
 		}
 		out = append(out, enrollTarget{Alias: h.Alias, Dest: d, Port: h.Port})
 		if h.Alias == dest || h.Alias == destHost || addr == destHost {
@@ -211,8 +275,13 @@ type enrollOpts struct {
 	Confirm func(question string) bool
 	// Fingerprint renders the key for the operator to check out of band.
 	Fingerprint func(pub string) (string, error)
-	// AuthorizeLocal adds the key to THIS machine's authorized_keys.
+	// AuthorizeLocal adds the key to THIS machine's authorized_keys; nil
+	// leaves this machine alone (a --host-scoped enroll).
 	AuthorizeLocal func(pub string) (string, error)
+	// Pub, when set, is the new machine's public key handed over out of band
+	// (--pubkey): nothing connects to the new machine, so there is no read
+	// and no login check — for a machine that runs no SSH server.
+	Pub string
 }
 
 // enrollKey authorizes another machine's PUBLIC key on every fleet host and on
@@ -225,17 +294,19 @@ type enrollOpts struct {
 // the operator has seen the fingerprint and every host that would change and
 // said yes; each write keeps existing keys and takes a backup first.
 func enrollKey(out io.Writer, r runner.Runner, o enrollOpts) error {
-	readCmd, err := remotePubCmd(o.Key)
-	if err != nil {
-		return err
-	}
-	raw, err := r.Run(o.Dest, readCmd)
-	if err != nil {
-		why := ""
-		if sshfail.Classify(err) == sshfail.Auth && !sshfail.IsHostKey(sshfail.Note(err)) {
-			why = " — this machine cannot log in to it either; run enroll from one that can"
+	raw := o.Pub
+	if raw == "" {
+		readCmd, err := remotePubCmd(o.Key)
+		if err != nil {
+			return err
 		}
-		return fmt.Errorf("%s: reading its public key: %w%s", o.Dest, err, why)
+		if raw, err = r.Run(o.Dest, posixSh(readCmd)); err != nil {
+			why := " — if it runs no SSH server, copy its ~/.ssh/<key>.pub here and use --pubkey"
+			if sshfail.Classify(err) == sshfail.Auth && !sshfail.IsHostKey(sshfail.Note(err)) {
+				why = " — this machine cannot log in to it either; run enroll from one that can, or copy its .pub here and use --pubkey"
+			}
+			return fmt.Errorf("%s: reading its public key: %w%s", o.Dest, err, why)
+		}
 	}
 	pub, err := normalizePub(raw)
 	if err != nil {
@@ -248,7 +319,9 @@ func enrollKey(out io.Writer, r runner.Runner, o enrollOpts) error {
 
 	fmt.Fprintf(out, "%s offers this key — check it on that machine (ssh-keygen -lf ~/.ssh/<key>.pub):\n    %s\n", o.Dest, strings.TrimSpace(fp))
 	fmt.Fprintln(out, "authorize it for logins to:")
-	fmt.Fprintf(out, "    %-20s ~/.ssh/authorized_keys\n", "(this machine)")
+	if o.AuthorizeLocal != nil {
+		fmt.Fprintf(out, "    %-20s ~/.ssh/authorized_keys\n", "(this machine)")
+	}
 	for _, t := range o.Targets {
 		fmt.Fprintf(out, "    %-20s %s\n", t.Alias, t.Dest)
 	}
@@ -259,25 +332,31 @@ func enrollKey(out io.Writer, r runner.Runner, o enrollOpts) error {
 	}
 
 	failures := 0
-	if st, err := o.AuthorizeLocal(pub); err != nil {
-		fmt.Fprintf(out, "FAIL %-20s %v\n", "(this machine)", err)
-		failures++
-	} else {
-		fmt.Fprintf(out, "ok   %-20s %s\n", "(this machine)", st)
+	if o.AuthorizeLocal != nil {
+		if st, err := o.AuthorizeLocal(pub); err != nil {
+			fmt.Fprintf(out, "FAIL %-20s %v\n", "(this machine)", err)
+			failures++
+		} else {
+			fmt.Fprintf(out, "ok   %-20s %s\n", "(this machine)", appendNote(st))
+		}
 	}
 	var done []enrollTarget
 	for _, t := range o.Targets {
-		res, err := r.Run(t.Alias, appendKeyCmd(remoteAuthorizedKeys, pub, o.Stamp))
+		res, err := r.Run(t.Alias, posixSh(appendKeyCmd(remoteAuthorizedKeys, pub, o.Stamp)))
 		if err != nil {
 			fmt.Fprintf(out, "FAIL %-20s %v\n", t.Alias, err)
 			failures++
 			continue
 		}
-		fmt.Fprintf(out, "ok   %-20s %s\n", t.Alias, appendStatus(res))
+		fmt.Fprintf(out, "ok   %-20s %s\n", t.Alias, appendNote(appendStatus(res)))
 		done = append(done, t)
 	}
 
-	failures += verifyFromNewMachine(out, r, o.Dest, done)
+	if o.Pub != "" {
+		fmt.Fprintf(out, "not verified: the key was handed over with --pubkey; run `fleet status` on %s\n", o.Dest)
+	} else {
+		failures += verifyFromNewMachine(out, r, o.Dest, o.Key, done)
+	}
 	if failures > 0 {
 		return fmt.Errorf("%d host(s) failed", failures)
 	}
@@ -288,16 +367,16 @@ func enrollKey(out io.Writer, r runner.Runner, o enrollOpts) error {
 // returns how many still refuse its key. A host-key fault is not counted: the
 // key is authorized, the new machine just has not trusted that host yet, and
 // the fix (`fleet trust`) is on the new machine, not here.
-func verifyFromNewMachine(out io.Writer, r runner.Runner, dest string, ts []enrollTarget) int {
+func verifyFromNewMachine(out io.Writer, r runner.Runner, dest, key string, ts []enrollTarget) int {
 	if len(ts) == 0 {
 		return 0
 	}
-	vc, err := verifyCmd(ts)
+	vc, err := verifyCmd(ts, key)
 	if err != nil {
 		fmt.Fprintf(out, "not verified: %v\n", err)
 		return 0
 	}
-	vout, err := r.Run(dest, vc)
+	vout, err := r.Run(dest, posixSh(vc))
 	if err != nil {
 		fmt.Fprintf(out, "not verified: could not run the check on %s: %v\n", dest, err)
 		return 0
@@ -405,13 +484,22 @@ func outboundIP() string {
 }
 
 // enrollHint is the next step for a machine whose key nothing accepts yet.
+// dest is a guess (the default route's address), so the hint says how to
+// correct it, and names --pubkey for a machine nothing can SSH into.
 func enrollHint(dest string) string {
-	return fmt.Sprintf("  on a machine that already has SSH access to the fleet, run:\n      fleet keys enroll %s\n", dest)
+	return fmt.Sprintf("  on a machine that already has SSH access to the fleet, run:\n"+
+		"      fleet keys enroll %s\n"+
+		"  (use another address of this machine if that one is not reachable from there —\n"+
+		"  a VPN or WSL NAT address; if this machine runs no SSH server, copy its\n"+
+		"  ~/.ssh/<key>.pub over and run `fleet keys enroll --pubkey <file> <name>`)\n", dest)
 }
 
 // revokeHost removes ONE key from a host's authorized_keys: every line holding
-// that key (under any comment) is shown first and removed, exactly as written,
-// only when confirmed. The keys-delete twin of pruneHost.
+// that key (under any comment or options) is shown first and removed only
+// when confirmed. The removal matches on type+blob on the host itself
+// (revokeKeyCmd) rather than echoing the displayed line back, so options with
+// $ or backticks, CRLF and odd spacing cannot make it miss, and it fails
+// unless the key is verifiably gone. The keys-delete twin of pruneHost.
 func revokeHost(out io.Writer, r runner.Runner, host, pub string, confirmed bool) (PruneResult, error) {
 	rk, err := remoteKeys(r, host)
 	if err != nil {
@@ -441,10 +529,8 @@ func revokeHost(out io.Writer, r runner.Runner, host, pub string, confirmed bool
 		fmt.Fprintf(out, "%s: not confirmed — nothing changed\n", host)
 		return res, nil
 	}
-	for _, h := range hits {
-		if _, err := r.Run(host, removeKeyCmd(authorizedKeys, h)); err != nil {
-			return res, fmt.Errorf("%s: removing key: %w", host, err)
-		}
+	if _, err := r.Run(host, posixSh(revokeKeyCmd(remoteAuthorizedKeys, needle, backupStamp(time.Now())))); err != nil {
+		return res, fmt.Errorf("%s: removing key: %w", host, err)
 	}
 	res.Changed = true
 	fmt.Fprintf(out, "%s: removed\n", host)
@@ -453,6 +539,7 @@ func revokeHost(out io.Writer, r runner.Runner, host, pub string, confirmed bool
 
 var (
 	enrollKeyName string
+	enrollPubFile string
 	enrollHosts   []string
 	enrollYes     bool
 	deleteHosts   []string
@@ -470,7 +557,14 @@ machine whose key nothing accepts yet (an alias, or user@address):
 It reads the new machine's PUBLIC key over SSH, shows its fingerprint and
 every host that would change, and on confirmation appends it (backup first,
 existing keys kept) to authorized_keys here and on every fleet host, then
-logs in from the new machine to prove it worked. No private key moves.`,
+logs in from the new machine to prove it worked. No private key moves.
+
+A machine that runs no SSH server can still be enrolled: copy its public key
+over and pass it with --pubkey (a file, or - for stdin). Nothing then
+connects to it, so nothing is checked from its side.
+
+With --host, only the named fleet hosts change: this machine and the new one
+are left alone.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dest := args[0]
@@ -484,16 +578,33 @@ logs in from the new machine to prove it worked. No private key moves.`,
 		if hosts, err = checkHosts(hosts, enrollHosts); err != nil {
 			return err
 		}
+		var pub string
+		if enrollPubFile != "" {
+			b, err := readPubArg(cmd.InOrStdin(), enrollPubFile)
+			if err != nil {
+				return err
+			}
+			pub = string(b)
+		}
+		// --host scopes the change to the named fleet hosts; --pubkey means
+		// nothing can reach the new machine, so it cannot be a target.
+		scoped := len(enrollHosts) > 0
+		local := authorizeLocal
+		if scoped {
+			local = nil
+		}
+		resolveUser := func(alias string) string { return sshResolved(alias, "user") }
 		return enrollKey(cmd.OutOrStdout(), runner.Exec{}, enrollOpts{
 			Dest:    dest,
 			Key:     enrollKeyName,
 			Stamp:   backupStamp(time.Now()),
-			Targets: enrollTargets(hosts, dest),
+			Targets: enrollTargets(hosts, dest, resolveUser, !scoped && pub == ""),
 			Confirm: func(q string) bool {
 				return enrollYes || askYesNo(cmd, q)
 			},
 			Fingerprint:    fingerprintPub,
-			AuthorizeLocal: authorizeLocal,
+			AuthorizeLocal: local,
+			Pub:            pub,
 		})
 	},
 }
@@ -557,9 +668,32 @@ var keysDeleteCmd = &cobra.Command{
 
 func init() {
 	keysEnrollCmd.Flags().StringVar(&enrollKeyName, "key", "", "key name in the new machine's ~/.ssh (default: the one it would offer)")
-	keysEnrollCmd.Flags().StringSliceVar(&enrollHosts, "host", nil, "authorize on only these fleet hosts (repeatable); default is every fleet host")
+	keysEnrollCmd.Flags().StringVar(&enrollPubFile, "pubkey", "", "the new machine's public key file (- for stdin) instead of reading it over SSH")
+	keysEnrollCmd.Flags().StringSliceVar(&enrollHosts, "host", nil, "authorize on only these fleet hosts (repeatable; leaves this machine and the new one alone); default is every fleet host and both machines")
 	keysEnrollCmd.Flags().BoolVar(&enrollYes, "yes", false, "skip the confirmation prompt (non-interactive)")
 	keysDeleteCmd.Flags().StringSliceVar(&deleteHosts, "host", nil, "revoke on only these fleet hosts (repeatable); default is every fleet host")
 	keysDeleteCmd.Flags().BoolVar(&deleteYes, "yes", false, "skip the confirmation prompts (non-interactive)")
 	keysCmd.AddCommand(keysEnrollCmd, keysDeleteCmd)
+}
+
+// readPubArg reads --pubkey: a file, or stdin for "-". It is capped, since a
+// public key is one short line and anything large is a mistake.
+func readPubArg(stdin io.Reader, name string) ([]byte, error) {
+	src := stdin
+	if name != "-" {
+		f, err := os.Open(name)
+		if err != nil {
+			return nil, fmt.Errorf("--pubkey: %w", err)
+		}
+		defer func() { _ = f.Close() }()
+		src = f
+	}
+	b, err := io.ReadAll(io.LimitReader(src, 16<<10))
+	if err != nil {
+		return nil, fmt.Errorf("--pubkey: %w", err)
+	}
+	if len(strings.TrimSpace(string(b))) == 0 {
+		return nil, fmt.Errorf("--pubkey %s: empty", name)
+	}
+	return b, nil
 }

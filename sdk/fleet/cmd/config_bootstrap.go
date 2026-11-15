@@ -150,15 +150,17 @@ func keyBootstrapHint(rows []Row) string {
 	if len(need) == 0 {
 		return ""
 	}
-	var keysOnly, pwHosts []string
+	// Partition need itself, so the two lists always add up to the header.
+	note := make(map[string]string, len(rows))
 	for _, r := range rows {
-		if r.Class != string(drift.AuthFailed) || sshfail.IsHostKey(r.Note) {
-			continue
-		}
-		if sshfail.IsKeysOnly(r.Note) {
-			keysOnly = append(keysOnly, r.Alias)
+		note[r.Alias] = r.Note
+	}
+	var keysOnly, pwHosts []string
+	for _, a := range need {
+		if sshfail.IsKeysOnly(note[a]) {
+			keysOnly = append(keysOnly, a)
 		} else {
-			pwHosts = append(pwHosts, r.Alias)
+			pwHosts = append(pwHosts, a)
 		}
 	}
 	var b strings.Builder

@@ -29,7 +29,7 @@ func syncKeyToHost(r runner.Runner, host, pub string) error {
 	if pub == "" {
 		return fmt.Errorf("%s: refusing to sync an empty key", host)
 	}
-	if _, err := r.Run(host, appendKeyCmd(remoteAuthorizedKeys, pub, backupStamp(time.Now()))); err != nil {
+	if _, err := r.Run(host, posixSh(appendKeyCmd(remoteAuthorizedKeys, pub, backupStamp(time.Now())))); err != nil {
 		return fmt.Errorf("%s: authorizing key: %w", host, err)
 	}
 	return nil
@@ -234,12 +234,14 @@ type PruneResult struct {
 // `grep -vxF` exits 1 when it selects no lines, which is the normal case when
 // removing a host's LAST key — so the status must be tolerated explicitly.
 // Chaining with && (as this first did) aborted and left the key in place.
-// Exit >1 is a real grep error and still fails.
+// Exit >1 is a real grep error and still fails. The line is single-quoted:
+// it is free text from a host's file, and a Go %q (double quotes) let the
+// shell expand any $ or backtick in its options before grep saw it.
 func removeKeyCmd(path, key string) string {
 	return fmt.Sprintf(
-		`tmp=$(mktemp) && { grep -vxF %[2]q %[1]s > "$tmp"; s=$?; [ "$s" -le 1 ]; } `+
+		`tmp=$(mktemp) && { grep -vxF -- %[2]s %[1]s > "$tmp"; s=$?; [ "$s" -le 1 ]; } `+
 			`&& cat "$tmp" > %[1]s && rm -f "$tmp" && chmod 600 %[1]s`,
-		path, key)
+		path, shq(key))
 }
 
 // pruneHost reports which authorized keys are foreign to the managed set and

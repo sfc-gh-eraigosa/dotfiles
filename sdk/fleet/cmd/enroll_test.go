@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 )
 
 // scriptRunner answers by (host, command fragment), because enroll sends three
@@ -240,7 +241,7 @@ func TestRemotePubCmdRunsUnderShAndZsh(t *testing.T) {
 }
 
 func TestVerifyCmdRefusesUnsafeDestinations(t *testing.T) {
-	if _, err := verifyCmd([]enrollTarget{{Alias: "nano", Dest: "me@10.0.0.63", Port: "2222"}}); err != nil {
+	if _, err := verifyCmd([]enrollTarget{{Alias: "nano", Dest: "me@10.0.0.63", Port: "2222"}}, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, bad := range []enrollTarget{
@@ -251,7 +252,7 @@ func TestVerifyCmdRefusesUnsafeDestinations(t *testing.T) {
 		{Alias: "x;y", Dest: "ok"},
 		{Alias: "x", Dest: "ok", Port: "22;id"},
 	} {
-		if _, err := verifyCmd([]enrollTarget{bad}); err == nil {
+		if _, err := verifyCmd([]enrollTarget{bad}, ""); err == nil {
 			t.Errorf("verifyCmd accepted %+v", bad)
 		}
 	}
@@ -420,7 +421,7 @@ func TestEnrollRoutesAnUntrustedHostKeyToFleetTrust(t *testing.T) {
 }
 
 func TestEnrollTargetsAddTheNewMachineWhenNotInTheFleet(t *testing.T) {
-	got := enrollTargets(nil, "me@10.0.0.9")
+	got := enrollTargets(nil, "me@10.0.0.9", nil, true)
 	if len(got) != 1 || got[0].Alias != "me@10.0.0.9" || got[0].Dest != "me@10.0.0.9" {
 		t.Fatalf("targets = %+v", got)
 	}
@@ -441,7 +442,7 @@ func TestRevokeHostDeclinedChangesNothing(t *testing.T) {
 		t.Fatalf("res = %+v", res)
 	}
 	for _, c := range *r.log {
-		if strings.Contains(c, "grep -vxF") {
+		if strings.Contains(c, ".bak-") {
 			t.Fatalf("declined revoke mutated: %q", c)
 		}
 	}
@@ -461,12 +462,12 @@ func TestRevokeHostRemovesTheMatchedLine(t *testing.T) {
 	}
 	removed := false
 	for _, c := range *r.log {
-		if strings.Contains(c, "grep -vxF") && strings.Contains(c, "renamed@there") && !strings.Contains(c, "AAAkeep") {
+		if strings.HasPrefix(c, "sh -c ") && strings.Contains(c, "ssh-ed25519 AAAgone") && !strings.Contains(c, "AAAkeep") {
 			removed = true
 		}
 	}
 	if !removed {
-		t.Fatalf("expected a targeted removal of the matched line: %v", *r.log)
+		t.Fatalf("expected a targeted removal of the matched key: %v", *r.log)
 	}
 }
 
@@ -512,5 +513,184 @@ func TestSelfDestPrefersAnAddress(t *testing.T) {
 	}
 	if got := selfDestFrom("", "", ""); got != "<this-machine>" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// keys delete used to echo the displayed line back through Go %q (double
+// quotes): the remote shell expanded $HOME in a command= option, a CRLF or
+// re-indented line no longer matched grep -x, nothing was removed — and the
+// host was still reported "removed". The removal now matches type+blob on
+// the host and fails unless the key is gone.
+func TestRevokeKeyCmdRemovesTheKeyHoweverTheLineIsWritten(t *testing.T) {
+	dir := t.TempDir()
+	ak := filepath.Join(dir, "authorized_keys")
+	gone := "ssh-ed25519 AAAAgone"
+	mustWriteFile(t, ak, []byte(
+		"ssh-ed25519 AAAAkeep other\n"+
+			`command="rrsync $HOME/x",no-pty `+gone+" old-laptop\n"+
+			"  "+gone+"   spaced\n"+
+			gone+" crlf\r\n"+
+			"# "+gone+" a note about the key\n"+
+			"ssh-ed25519 AAAAgonesuffix lookalike\n"), 0o600)
+	for _, sh := range []string{"bash", "zsh"} {
+		if _, err := exec.LookPath(sh); err != nil {
+			continue
+		}
+		cmd := revokeKeyCmd(ak, gone, "20261114T000000Z")
+		out, err := exec.Command(sh, "-c", cmd).CombinedOutput()
+		if err != nil || strings.TrimSpace(string(out)) != "removed" {
+			t.Fatalf("%s: %v %q", sh, err, out)
+		}
+		got, _ := os.ReadFile(ak)
+		want := "ssh-ed25519 AAAAkeep other\n# " + gone + " a note about the key\nssh-ed25519 AAAAgonesuffix lookalike\n"
+		if string(got) != want {
+			t.Fatalf("%s: file now\n%q\nwant\n%q", sh, got, want)
+		}
+		if len(backupsIn(t, dir)) == 0 {
+			t.Fatalf("%s: no backup taken", sh)
+		}
+	}
+}
+
+func TestRevokeKeyCmdFailsOnAMissingFile(t *testing.T) {
+	ak := filepath.Join(t.TempDir(), "authorized_keys")
+	if out, err := exec.Command("sh", "-c", revokeKeyCmd(ak, "ssh-ed25519 AAAA", "x")).CombinedOutput(); err == nil {
+		t.Fatalf("revoke on a missing file reported success: %q", out)
+	}
+}
+
+// A key present only behind options was narrowed on purpose: appending a
+// plain line would silently widen it, and calling it "present" hid that
+// the new machine is still refused.
+func TestAppendKeyCmdReportsARestrictedGrantAndLeavesIt(t *testing.T) {
+	dir := t.TempDir()
+	ak := filepath.Join(dir, "authorized_keys")
+	before := `from="10.0.0.5" ` + newPub + "\n"
+	mustWriteFile(t, ak, []byte(before), 0o600)
+	if got := runAppend(t, ak, newPub); got != "restricted" {
+		t.Fatalf("got %q, want restricted", got)
+	}
+	if b, _ := os.ReadFile(ak); string(b) != before {
+		t.Fatalf("restricted grant was changed: %q", b)
+	}
+	if !strings.Contains(appendNote("restricted"), "from=") {
+		t.Fatal("restricted needs an explanation")
+	}
+}
+
+func TestAppendKeyCmdSeesTheKeyThroughCRLFAndSpacing(t *testing.T) {
+	ak := filepath.Join(t.TempDir(), "authorized_keys")
+	f := strings.Fields(newPub)
+	mustWriteFile(t, ak, []byte("  "+f[0]+"   "+f[1]+" other\r\n"), 0o600)
+	if got := runAppend(t, ak, newPub); got != "present" {
+		t.Fatalf("got %q, want present", got)
+	}
+}
+
+// Remote commands reach the login shell, which may be fish or tcsh; they are
+// handed to sh as one quoted word, and that word must survive the trip.
+func TestRemoteBuildersRunUnderShFromAnyLoginShell(t *testing.T) {
+	ak := filepath.Join(t.TempDir(), "authorized_keys")
+	c := posixSh(appendKeyCmd(ak, newPub, "20261114T000000Z"))
+	if !strings.HasPrefix(c, "sh -c '") || strings.Contains(c, "!") {
+		t.Fatalf("not an sh -c word tcsh can carry: %q", c)
+	}
+	for _, sh := range []string{"bash", "zsh", "fish", "tcsh"} {
+		if _, err := exec.LookPath(sh); err != nil {
+			continue
+		}
+		_ = os.Remove(ak)
+		out, err := exec.Command(sh, "-c", c).CombinedOutput()
+		if err != nil || strings.TrimSpace(string(out)) != "added" {
+			t.Fatalf("%s: %v %q", sh, err, out)
+		}
+	}
+}
+
+// --key names the identity to prove; the check must offer only that one,
+// or a different, unauthorized default key makes every host "FAIL".
+func TestVerifyCmdOffersOnlyTheNamedKey(t *testing.T) {
+	ts := []enrollTarget{{Alias: "nano", Dest: "me@10.0.0.63"}}
+	c, err := verifyCmd(ts, "fleet_ed25519")
+	if err != nil || !strings.Contains(c, `-o IdentitiesOnly=yes -i "$HOME/.ssh/fleet_ed25519"`) {
+		t.Fatalf("err = %v, cmd = %q", err, c)
+	}
+	if c, _ := verifyCmd(ts, ""); strings.Contains(c, "IdentitiesOnly") {
+		t.Fatalf("no --key must leave ssh's own choice: %q", c)
+	}
+	if _, err := verifyCmd(ts, "../x"); err == nil {
+		t.Fatal("unsafe key name accepted")
+	}
+}
+
+// A block with no User line logs in as whatever OUR ssh resolves; the new
+// machine's own login name may differ, so the destination must name it.
+func TestEnrollTargetsNameTheResolvedLoginUser(t *testing.T) {
+	hosts := []sshconf.Host{{Alias: "spark", HostName: "10.0.0.201"}, {Alias: "pi", HostName: "10.0.0.128", User: "pi"}}
+	got := enrollTargets(hosts, "me@10.0.0.9", func(string) string { return "alice" }, true)
+	if got[0].Dest != "alice@10.0.0.201" || got[1].Dest != "pi@10.0.0.128" {
+		t.Fatalf("targets = %+v", got)
+	}
+	if len(got) != 3 {
+		t.Fatalf("the new machine itself should be a target: %+v", got)
+	}
+	if got := enrollTargets(hosts, "me@10.0.0.9", nil, false); len(got) != 2 {
+		t.Fatalf("a scoped enroll must leave the new machine out: %+v", got)
+	}
+}
+
+// --host nano means nano: this machine's authorized_keys is not touched.
+func TestScopedEnrollLeavesThisMachineAlone(t *testing.T) {
+	r, sent, hosts := newScriptRunner(
+		scriptAnswer{host: "box2", contains: "id_ed25519", out: newPub},
+		scriptAnswer{host: "nano", contains: "authorized_keys", out: "added"},
+	)
+	sb, o, local := baseEnroll(true)
+	o.Targets = o.Targets[:1]
+	o.AuthorizeLocal = nil
+	if err := enrollKey(sb, r, o); err != nil {
+		t.Fatalf("%v\n%s", err, sb)
+	}
+	if len(*local) != 0 || strings.Contains(sb.String(), "(this machine)") {
+		t.Fatalf("scoped enroll touched this machine:\n%s", sb)
+	}
+	for i, c := range *sent {
+		if strings.Contains(c, ">>") && (*hosts)[i] != "nano" {
+			t.Fatalf("wrote outside --host: %s %q", (*hosts)[i], c)
+		}
+	}
+}
+
+// A machine with no SSH server can still be enrolled from a copied .pub;
+// nothing then connects to it, so there is no read and no check.
+func TestEnrollWithAHandedOverPubkeyNeverConnectsToTheNewMachine(t *testing.T) {
+	r, _, hosts := newScriptRunner(scriptAnswer{host: "nano", contains: "authorized_keys", out: "added"})
+	sb, o, _ := baseEnroll(true)
+	o.Pub = newPub + "\n"
+	o.Targets = o.Targets[:1]
+	if err := enrollKey(sb, r, o); err != nil {
+		t.Fatalf("%v\n%s", err, sb)
+	}
+	for _, h := range *hosts {
+		if h == "box2" {
+			t.Fatalf("connected to the new machine: %v", *hosts)
+		}
+	}
+	if !strings.Contains(sb.String(), "not verified") {
+		t.Fatalf("must say it could not check:\n%s", sb)
+	}
+}
+
+func TestReadPubArg(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "k.pub")
+	mustWriteFile(t, p, []byte(newPub+"\n"), 0o644)
+	if b, err := readPubArg(nil, p); err != nil || strings.TrimSpace(string(b)) != newPub {
+		t.Fatalf("%q %v", b, err)
+	}
+	if b, err := readPubArg(strings.NewReader(newPub), "-"); err != nil || string(b) != newPub {
+		t.Fatalf("stdin: %q %v", b, err)
+	}
+	if _, err := readPubArg(strings.NewReader("  \n"), "-"); err == nil {
+		t.Fatal("empty input accepted")
 	}
 }

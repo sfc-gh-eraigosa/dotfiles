@@ -131,7 +131,12 @@ injected `now`.
   machine to each host and report ok / refused / host key not yet trusted. A keys-only
   refusal (no `password`/`keyboard-interactive` offered) anywhere in fleet — status hint,
   scan hint, TUI tip, first-run onboarding — names `fleet keys enroll <this machine>`
-  instead of `ssh-copy-id`, which cannot work there.
+  instead of `ssh-copy-id`, which cannot work there. `--key` makes the check offer only
+  that identity; a host block with no `User` names the login `ssh -G` resolves here.
+  `--pubkey <file|->` enrolls a machine that runs no SSH server (nothing connects to
+  it, so no read and no check); `--host` changes only the named fleet hosts. A key
+  authorized only behind options (`from=`, `command=`) is reported `restricted` and left
+  as is. `delete` matches type+blob on the host and fails unless the key is gone.
 
 ## 5. Evaluation criteria (per feature)
 

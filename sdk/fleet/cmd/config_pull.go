@@ -54,13 +54,17 @@ func pullPlan(r runner.Runner, source, localText string, o cfgplan.Opts) (cfgpla
 
 // sourceHostName asks the local ssh client what a source alias resolves to,
 // so the loopback guard can fire before any connection is opened.
-func sourceHostName(alias string) string {
+func sourceHostName(alias string) string { return sshResolved(alias, "hostname") }
+
+// sshResolved is one setting as the local ssh client would apply it to alias
+// (`ssh -G`: Host * defaults and Match blocks included), or "" if unknown.
+func sshResolved(alias, key string) string {
 	out, err := exec.Command("ssh", "-G", alias).Output()
 	if err != nil {
 		return ""
 	}
 	for _, line := range strings.Split(string(out), "\n") {
-		if f := strings.Fields(line); len(f) == 2 && f[0] == "hostname" {
+		if f := strings.Fields(line); len(f) == 2 && f[0] == key {
 			return f[1]
 		}
 	}
