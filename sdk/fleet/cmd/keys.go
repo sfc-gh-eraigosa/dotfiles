@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
@@ -20,19 +21,15 @@ const authorizedKeys = "~/.ssh/authorized_keys"
 //
 // It never transfers private key material: the shell script this replaces
 // scp'd the private key to every host, so one compromised machine yielded an
-// identity valid everywhere. The remote append is grep-guarded so re-syncing
-// is a no-op rather than growing the file, and any failure is returned with
-// the host named rather than swallowed.
+// identity valid everywhere. The write is appendKeyCmd — grep-guarded (a
+// re-sync is a no-op), backed up first, newline-safe — and any failure is
+// returned with the host named rather than swallowed.
 func syncKeyToHost(r runner.Runner, host, pub string) error {
 	pub = strings.Join(strings.Fields(pub), " ")
 	if pub == "" {
 		return fmt.Errorf("%s: refusing to sync an empty key", host)
 	}
-	cmdline := fmt.Sprintf(
-		"mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch %[1]s && chmod 600 %[1]s && "+
-			"grep -qxF %[2]q %[1]s || printf '%%s\\n' %[2]q >> %[1]s",
-		authorizedKeys, pub)
-	if _, err := r.Run(host, cmdline); err != nil {
+	if _, err := r.Run(host, posixSh(appendKeyCmd(remoteAuthorizedKeys, pub, backupStamp(time.Now())))); err != nil {
 		return fmt.Errorf("%s: authorizing key: %w", host, err)
 	}
 	return nil
@@ -237,12 +234,14 @@ type PruneResult struct {
 // `grep -vxF` exits 1 when it selects no lines, which is the normal case when
 // removing a host's LAST key — so the status must be tolerated explicitly.
 // Chaining with && (as this first did) aborted and left the key in place.
-// Exit >1 is a real grep error and still fails.
+// Exit >1 is a real grep error and still fails. The line is single-quoted:
+// it is free text from a host's file, and a Go %q (double quotes) let the
+// shell expand any $ or backtick in its options before grep saw it.
 func removeKeyCmd(path, key string) string {
 	return fmt.Sprintf(
-		`tmp=$(mktemp) && { grep -vxF %[2]q %[1]s > "$tmp"; s=$?; [ "$s" -le 1 ]; } `+
+		`tmp=$(mktemp) && { grep -vxF -- %[2]s %[1]s > "$tmp"; s=$?; [ "$s" -le 1 ]; } `+
 			`&& cat "$tmp" > %[1]s && rm -f "$tmp" && chmod 600 %[1]s`,
-		path, key)
+		path, shq(key))
 }
 
 // pruneHost reports which authorized keys are foreign to the managed set and

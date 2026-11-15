@@ -121,3 +121,29 @@ func AuthMethods(err error) []string {
 	}
 	return strings.Split(list, ",")
 }
+
+// KeysOnlyNote is the row note for a host that refused our key and offers no
+// password method. It extends Note's "permission denied" so a reader still
+// sees the fault, and it never starts with "host key " (IsHostKey).
+const KeysOnlyNote = "permission denied; keys only"
+
+// KeysOnly reports whether a refused login listed authentication methods and
+// none of them can take a typed secret. Such a host cannot be bootstrapped by
+// ssh-copy-id from the refused machine: the key has to be authorized from a
+// machine that already reaches it (`fleet keys enroll`). False when the
+// stderr carries no method list — no evidence is not a verdict.
+func KeysOnly(err error) bool {
+	methods := AuthMethods(err)
+	if len(methods) == 0 {
+		return false
+	}
+	for _, m := range methods {
+		if m == "password" || m == "keyboard-interactive" {
+			return false
+		}
+	}
+	return true
+}
+
+// IsKeysOnly reports whether a row Note is KeysOnlyNote.
+func IsKeysOnly(note string) bool { return note == KeysOnlyNote }

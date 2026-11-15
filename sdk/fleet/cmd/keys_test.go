@@ -94,8 +94,9 @@ func TestKeysSyncIsIdempotentOnTheRemoteSide(t *testing.T) {
 	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": ""}}, log: &sent}
 	_ = syncKeyToHost(r, "alpha", "ssh-ed25519 AAA me@box")
 	// The remote command must guard the append, or repeated syncs grow the file.
-	if !strings.Contains(strings.Join(sent, " "), "grep") {
-		t.Fatalf("append must be guarded by a grep so re-syncing is a no-op: %v", sent)
+	// (TestAppendKeyCmdIsANoOpWhenTheKeyIsPresent runs the guard for real.)
+	if c := strings.Join(sent, " "); !strings.Contains(c, "present") || !strings.Contains(c, "exit 0") {
+		t.Fatalf("append must be guarded so re-syncing is a no-op: %v", sent)
 	}
 }
 
@@ -213,5 +214,20 @@ func TestRemoveKeyCommandKeepsOtherKeys(t *testing.T) {
 	got, _ := os.ReadFile(ak)
 	if !strings.Contains(string(got), "AAA") || strings.Contains(string(got), "ZZZ") {
 		t.Fatalf("wrong lines removed: %q", got)
+	}
+}
+
+// A pruned line is free text from the host: its $ and backticks must reach
+// grep literally, not be expanded by the remote shell first.
+func TestRemoveKeyCommandTakesTheLineLiterally(t *testing.T) {
+	dir := t.TempDir()
+	ak := filepath.Join(dir, "authorized_keys")
+	line := `command="rrsync $HOME/x ` + "`id`" + `" ssh-ed25519 ZZZ ci@runner`
+	mustWriteFile(t, ak, []byte("ssh-ed25519 AAA me@box\n"+line+"\n"), 0o600)
+	if out, err := exec.Command("bash", "-c", removeKeyCmd(ak, line)).CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if got, _ := os.ReadFile(ak); strings.Contains(string(got), "ZZZ") {
+		t.Fatalf("line with $ / backticks not removed: %q", got)
 	}
 }

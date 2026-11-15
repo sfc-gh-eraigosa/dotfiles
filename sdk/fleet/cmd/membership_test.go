@@ -157,3 +157,23 @@ func TestWriteConfigCreatesMissingFile(t *testing.T) {
 		t.Fatalf("no backup should be made for a new file, got %v", entries)
 	}
 }
+
+// A config that is empty (fleet's own first run creates it empty seconds
+// before the scan fills it) has nothing to protect. Backing it up produced a
+// 0-byte config.bak-* that read like data loss to the person recovering.
+func TestWriteConfigSkipsTheBackupOfAnEmptyFile(t *testing.T) {
+	for name, old := range map[string]string{"empty": "", "whitespace": " \n\n"} {
+		dir := t.TempDir()
+		p := filepath.Join(dir, "config")
+		mustWriteFile(t, p, []byte(old), 0o600)
+		if err := writeConfig(p, "Host a\n    HostName 10.0.0.1\n"); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		entries, _ := os.ReadDir(dir)
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), "config.bak-") {
+				t.Errorf("%s: wrote a backup of nothing: %s", name, e.Name())
+			}
+		}
+	}
+}

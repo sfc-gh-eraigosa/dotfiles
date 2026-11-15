@@ -873,13 +873,16 @@ func (m tuiModel) busy() bool {
 // canAuthorize reports whether offering ssh-copy-id on the cursor host would
 // help. Only an auth-failed host qualifies: it answered SSH and refused our
 // credential, which is exactly what authorizing a key fixes. An unreachable
-// host has nothing to authorize against, and a working one needs nothing.
+// host has nothing to authorize against, and a working one needs nothing. A
+// host that takes keys only is excluded too: ssh-copy-id would have no
+// password to log in with, so that row's tip names `fleet keys enroll`.
 func (m tuiModel) canAuthorize() bool {
 	if !m.canStartConfigAction() {
 		return false
 	}
 	i := m.indexOf(m.cursor)
-	return i >= 0 && m.rows[i].Class == string(drift.AuthFailed) && !sshfail.IsHostKey(m.rows[i].Note)
+	return i >= 0 && m.rows[i].Class == string(drift.AuthFailed) &&
+		!sshfail.IsHostKey(m.rows[i].Note) && !sshfail.IsKeysOnly(m.rows[i].Note)
 }
 
 // canTrust is canAuthorize's twin for the OTHER auth fault: the host answered
@@ -913,6 +916,9 @@ func (m tuiModel) rowTip() string {
 	case string(drift.AuthFailed):
 		if m.canTrust() {
 			return fmt.Sprintf("%s: %s — press T to compare fingerprints and trust", r.Alias, r.Note)
+		}
+		if sshfail.IsKeysOnly(r.Note) {
+			return fmt.Sprintf("%s: refuses this machine's key and takes no password — on a machine that already reaches it, run: fleet keys enroll %s", r.Alias, selfDest())
 		}
 		return r.Alias + ": refused our key — press A to authorize it (ssh-copy-id), or s once if it uses a password"
 	case string(drift.Unreachable):

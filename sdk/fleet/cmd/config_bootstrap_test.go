@@ -6,6 +6,7 @@ import (
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 )
 
 // A pull that adds hosts should be able to authorize just those, not re-push
@@ -197,5 +198,38 @@ func TestUnreachableHintDoesNotRepeatAWakeStatusAlreadyTried(t *testing.T) {
 	}
 	if notTried := bootstrapHint(rows, noNote, false); !strings.Contains(notTried, "fleet wake") {
 		t.Fatalf("with --no-wake the hint should offer fleet wake:\n%s", notTried)
+	}
+}
+
+// The first-run failure: every host takes keys only, so ssh-copy-id
+// has nothing to log in with. The hint must name the command that works, run
+// from a machine that already has access.
+func TestKeyBootstrapHintSendsKeysOnlyHostsToEnroll(t *testing.T) {
+	old := selfDest
+	selfDest = func() string { return "me@10.0.0.175" }
+	defer func() { selfDest = old }()
+
+	keysOnly := []Row{
+		{Alias: "nano", Class: string(drift.AuthFailed), Note: sshfail.KeysOnlyNote},
+		{Alias: "gig", Class: string(drift.AuthFailed), Note: sshfail.KeysOnlyNote},
+	}
+	got := keyBootstrapHint(keysOnly)
+	if !strings.Contains(got, "fleet keys enroll me@10.0.0.175") {
+		t.Fatalf("hint must name the enroll command:\n%s", got)
+	}
+	if strings.Contains(got, "ssh-copy-id") {
+		t.Fatalf("ssh-copy-id cannot help a keys-only host:\n%s", got)
+	}
+
+	// A host that may take a password still gets the ssh-copy-id route,
+	// and the advice names only that host.
+	mixed := append(keysOnly, Row{Alias: "legacy", Class: string(drift.AuthFailed), Note: "permission denied"})
+	got = keyBootstrapHint(mixed)
+	if !strings.Contains(got, "fleet keys enroll") || !strings.Contains(got, "ssh-copy-id") {
+		t.Fatalf("mixed fleet needs both routes:\n%s", got)
+	}
+	_, pw, _ := strings.Cut(got, "ssh-copy-id")
+	if strings.Contains(pw, "nano") {
+		t.Fatalf("keys-only nano must not be offered ssh-copy-id:\n%s", got)
 	}
 }

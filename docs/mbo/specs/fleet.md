@@ -122,7 +122,21 @@ injected `now`.
   host. Private key material never leaves the workstation. Per-host result reported.
 - **F13 — keys prune/delete.** Diff-first: show exactly which entries would be removed from
   which hosts, then require confirmation (`--yes` for non-interactive). Never blanket-
-  overwrites `authorized_keys`.
+  overwrites `authorized_keys`. `delete <name>` revokes one managed key (matched by
+  type+blob, any comment) and leaves the local key files alone.
+- **F14 — keys enroll.** Run on a machine that already has access, naming a machine whose
+  key nothing accepts (alias or `user@address`): read its **public** key over SSH, show the
+  fingerprint and every host that would change, and only on confirmation append it —
+  backup first, existing keys kept — here and on every fleet host; then log in from the new
+  machine to each host and report ok / refused / host key not yet trusted. A keys-only
+  refusal (no `password`/`keyboard-interactive` offered) anywhere in fleet — status hint,
+  scan hint, TUI tip, first-run onboarding — names `fleet keys enroll <this machine>`
+  instead of `ssh-copy-id`, which cannot work there. `--key` makes the check offer only
+  that identity; a host block with no `User` names the login `ssh -G` resolves here.
+  `--pubkey <file|->` enrolls a machine that runs no SSH server (nothing connects to
+  it, so no read and no check); `--host` changes only the named fleet hosts. A key
+  authorized only behind options (`from=`, `command=`) is reported `restricted` and left
+  as is. `delete` matches type+blob on the host and fails unless the key is gone.
 
 ## 5. Evaluation criteria (per feature)
 
@@ -140,6 +154,7 @@ injected `now`.
 | F10 | `remove <alias>` | marker dropped, block retained | block deletion without `--purge`; loss of SSH reachability | alias not present → clear error, no write; `--purge` removes whole block | after `remove` the host is absent from `status` but `ssh` config still resolves it |
 | F11 | `keys list` | key → authorizing-hosts matrix | hosts outside fleet scope | key present locally but on no host → listed with empty host set | matrix matches `ssh-key-sync.sh --list` on the same hosts (parity capture) |
 | F12 | `keys sync` | public key authorized on each fleet host; per-host result | **any private key leaving the workstation**; silent per-host failure | key already authorized → no-op, still reported; unreachable host → failure + non-zero exit | transcript shows only `.pub` transferred; declined/failed hosts named |
+| F14 | `keys enroll <dest>` | new machine's public key authorized on every fleet host + here; per-host result; verified from the new machine | any write before the fingerprint and targets are shown and confirmed; reading anything but a `.pub`; removing existing keys | key already authorized → `present`, no backup; one host fails → others still processed, non-zero exit; host key untrusted on the new machine → reported with the `fleet trust` line, not as a failure | `TestEnroll*` / `TestAppendKeyCmd*` (real shell); live enroll transcript |
 | F13 | `keys prune`/`delete` | diff of entries to remove, then confirmation | any change before confirmation; blanket overwrite of `authorized_keys` | declined prune → nothing changes anywhere; `--yes` proceeds non-interactively | a foreign `authorized_keys` entry survives a declined prune (the defect-2 regression test) |
 
 ## 6. Verification harness
@@ -166,7 +181,9 @@ injected `now`.
   a foreign `authorized_keys` entry intact. Recorded under `plans/fleet/evidence/` per
   `superpowers:verification-before-completion`.
 - **Migration parity gate.** `fleet keys list` must be shown matching `ssh-key-sync.sh
-  --list` on the same hosts before `src/ssh-key-sync/` is retired.
+  --list` on the same hosts before `src/ssh-key-sync/` is retired. **Passed 2026-11-14**
+  ([evidence](../plans/fleet/evidence/ssh-key-sync-retirement.md)); the script is retired and
+  the `ssh-key-sync` skill now drives `fleet keys`.
 
 ## 7. Prerequisites / dependencies
 
@@ -177,8 +194,8 @@ injected `now`.
 - SSH access to the hosts via `~/.ssh/config` aliases with non-interactive auth (keys).
 - Each host keeps its dotfiles clone at `~/git/dotfiles` (true for all current hosts).
 - `ssh-keygen` available locally for `fleet keys sync` (already a dotfiles dependency).
-- `src/ssh-key-sync/ssh-key-sync.sh` stays in place until the §6 parity gate passes; its
-  skill is the fallback during the migration window.
+- ~~`src/ssh-key-sync/ssh-key-sync.sh` stays in place until the §6 parity gate passes~~ —
+  gate passed and the script was retired on 2026-11-14; the skill now drives `fleet keys`.
 
 ## 8. Out of scope (and why)
 

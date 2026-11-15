@@ -198,7 +198,7 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `s` | ssh to the cursor host (once is enough to prime a password-auth host) |
 | `S` | attach the cursor host's **herdr** through the local client (`herdr --remote <alias>`) — copies land on *this* machine's clipboard, which a plain `s` session over ssh cannot do (see [docs/macos-keys.md](../../docs/macos-keys.md), "herdr over SSH"); needs a herdr installed here. Inside a herdr pane the client refuses to nest, so `S` instead saves the host as a herdr **machine** (`herdr machine add <alias> --label <alias>`, once — already-saved hosts are skipped) and the status line says `prefix+w` to switch the herdr you already have open to it |
 | `T` | **trust** a host whose SSH host key changed — runs `fleet trust` (compare fingerprints, type the alias) |
-| `A` | **authorize** your public key on a host that refuses it — runs `ssh-copy-id` |
+| `A` | **authorize** your public key on a host that refuses it and takes a password — runs `ssh-copy-id`. A keys-only host is not offered `A` (there is no password to log in with); its status line names `fleet keys enroll` instead |
 | `p` / `P` | pull ssh config FROM / push it TO the cursor host (`fleet config pull\|push`) |
 | `h` | show / hide the **host list** |
 | `l` | show / hide the streaming **log** pane |
@@ -222,6 +222,7 @@ recent is being reported:
 ```text
 1/1   gig: host key CHANGED — press T to compare fingerprints and trust
 1/1   pi: refused our key — press A to authorize it (ssh-copy-id), or s once if it uses a password
+1/1   nas: refuses this machine's key and takes no password — on a machine that already reaches it, run: fleet keys enroll me@10.0.0.42
 1/1   nano: unreachable — press w to wake it
 1/1   lab: 24 commits behind — press u to update
 ```
@@ -965,18 +966,40 @@ Adopting is idempotent (`already in the fleet`) and reversible (`remove` unmarks
 it, restoring the original block). `remove` only **unmarks** by default: leaving
 the fleet never costs you SSH access. `--purge` is the destructive form.
 
-### `fleet keys list` / `sync` / `prune`
+### `fleet keys list` / `sync` / `enroll` / `delete` / `prune`
 
 Audit and manage `authorized_keys` across the fleet.
 
 ```sh
 fleet keys list                    # which of your public keys each host authorizes
 fleet keys sync                    # authorize your public key where it's missing
+fleet keys enroll me@10.0.0.42     # authorize ANOTHER machine's key (run where you have access)
+fleet keys enroll --pubkey new.pub laptop   # …from a copied .pub, when it runs no SSH server
+fleet keys delete old_key          # revoke one of your keys — shown first, confirm per host
 fleet keys prune                   # remove foreign keys — diff-first, confirm-per-change
 ```
 
 - **`sync` sends public-key material only** — no private key ever leaves the
-  workstation. The remote append is `grep`-guarded, so re-syncing is a no-op.
+  workstation. The remote append is `grep`-guarded (a key already authorized under
+  any comment counts), so re-syncing is a no-op; a real append backs the file up
+  to `authorized_keys.bak-<ts>` first and never glues onto an unterminated line.
+- **`enroll` is how a new machine joins a keys-only fleet.** A machine whose key
+  nothing accepts cannot fix that itself — appending to a host's `authorized_keys`
+  needs the access it lacks, and `ssh-copy-id` has no password to fall back on. So
+  run `enroll` on a machine that already has access, naming the new one by alias or
+  `user@address`. It reads the new machine's **public** key over SSH, prints the
+  fingerprint and every host that would change, and only on confirmation appends it
+  (backup first, existing keys kept) here and on every fleet host. It then logs in
+  from the new machine to each host and reports `ok`, a refusal, or a host key the
+  new machine has not trusted yet (with the `fleet trust` line to run there).
+  `--key NAME` picks a non-default key; `--host A` narrows the hosts; `--yes` skips
+  the prompt. `fleet status`, `fleet tui` and `fleet discover --scan` print the
+  exact `fleet keys enroll …` line whenever a host refuses the key and takes no
+  password, and first-run onboarding prints it right after generating a key.
+- **`delete <name>`** revokes `~/.ssh/<name>.pub` on every fleet host: each matching
+  line (under any comment) is shown and removed only on confirmation. It warns when
+  `<name>` is the key this machine uses to reach the fleet, and never deletes the
+  local key files.
 - **`prune` is diff-first**: it prints every removal, applies nothing without your
   confirmation, and deletes only that exact line — it never rewrites
   `authorized_keys` from local state.

@@ -10,6 +10,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 )
 
 // sshErr reproduces what runner.Exec.Run really returns when ssh fails: a
@@ -109,6 +110,30 @@ func TestAuthFailedHostIsNeverOfferedAsALiveRelayPeer(t *testing.T) {
 	for _, p := range seen {
 		if p.Alias == "blocked" && p.Reachable {
 			t.Fatal("a host that refused us was offered as a reachable relay peer")
+		}
+	}
+}
+
+// A host that refuses our key and offers no password gets the keys-only note,
+// which is what routes it to `fleet keys enroll` instead of ssh-copy-id.
+func TestKeysOnlyRefusalIsNotedOnTheRow(t *testing.T) {
+	cur := strings.Repeat("a", 40)
+	base := fakeBaseline{head: cur, ancestor: map[string]bool{cur: true}}
+	for _, tc := range []struct {
+		stderr   string
+		keysOnly bool
+	}{
+		{"me@10.0.0.5: Permission denied (publickey).\r\n", true},
+		{"Permission denied (publickey,password).\r\n", false},
+		{hostKeyFail, false},
+	} {
+		r := runner.Fake{Err: map[string]error{"h": sshErr(t, tc.stderr)}}
+		row := probeHost(sshconf.Host{Alias: "h"}, r, base)
+		if row.Class != string(drift.AuthFailed) {
+			t.Fatalf("%q: class = %q", tc.stderr, row.Class)
+		}
+		if got := sshfail.IsKeysOnly(row.Note); got != tc.keysOnly {
+			t.Errorf("%q: note %q keys-only = %v, want %v", tc.stderr, row.Note, got, tc.keysOnly)
 		}
 	}
 }

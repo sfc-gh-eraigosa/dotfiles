@@ -217,6 +217,11 @@ func probeHostWake(h sshconf.Host, peers func() []reach.Peer, r runner.Runner, b
 	authFailed := sshfail.Classify(err) == sshfail.Auth
 	if authFailed {
 		row.Note = sshfail.Note(err)
+		// A host that takes keys only cannot be bootstrapped with
+		// ssh-copy-id from here; the note routes it to `fleet keys enroll`.
+		if !sshfail.IsHostKey(row.Note) && sshfail.KeysOnly(err) {
+			row.Note = sshfail.KeysOnlyNote
+		}
 	}
 
 	if err != nil && w != nil && !authFailed {

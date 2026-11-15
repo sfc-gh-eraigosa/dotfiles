@@ -17,8 +17,12 @@ const sshConfigMode = 0o600
 // writeConfig replaces the ssh config, taking a timestamped backup of the
 // previous content first. A bad write here costs SSH access to every machine,
 // so the backup is not optional and happens before anything is truncated.
+//
+// An empty (or whitespace-only) file has nothing to protect and is not backed
+// up: fleet's first run creates the config empty seconds before the scan
+// fills it, and the resulting 0-byte config.bak-* read like data loss.
 func writeConfig(path, content string) error {
-	if old, err := os.ReadFile(path); err == nil {
+	if old, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(old)) != "" {
 		bak := fmt.Sprintf("%s.bak-%s", path, time.Now().UTC().Format("20060102T150405Z"))
 		if err := os.WriteFile(bak, old, sshConfigMode); err != nil {
 			return fmt.Errorf("backing up %s: %w", path, err)
