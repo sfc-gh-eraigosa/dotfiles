@@ -30,6 +30,9 @@ import (
 // fields need roster-aware semantics (PR 3, T14), so push only merges.
 const pushNeverRemoves = "push adds and updates hosts; it never removes them from the vault"
 
+// pushKnownHostsMerge is push's known_hosts rule, said in its help.
+const pushKnownHostsMerge = "the vault's lines for this machine's resolved fleet hosts are replaced by its own; every other vault line is kept"
+
 // maxPushRounds bounds the re-read/re-ask loop when another workstation keeps
 // writing the same items.
 const maxPushRounds = 3
@@ -66,7 +69,8 @@ func newVaultPushCmd() *cobra.Command {
 			"each of key/<workstation>, roster, inventory and known_hosts, asks once, then writes with\n" +
 			"compare-and-set; if another workstation wrote in between it re-reads, re-diffs and asks again.\n" +
 			"The existing local key is captured as-is; nothing new is generated.\n" +
-			"Inventory: " + pushNeverRemoves + ".",
+			"Inventory: " + pushNeverRemoves + ".\n" +
+			"known_hosts: " + pushKnownHostsMerge + "; -N in the diff counts only lines removed.",
 		Args: cobra.NoArgs,
 		RunE: gated(func(cmd *cobra.Command) error { return vaultPush(cmd, o) }),
 	}
@@ -361,7 +365,7 @@ func getVaultItem(ctx context.Context, st vault.Store, name string) (vault.Blob,
 // planVaultPush reads the four items and decides each one. It writes nothing
 // and needs no secret: the key is compared by fingerprint.
 func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk localKey,
-	inv vault.Inventory, invErr error, kh vault.KnownHosts, unresolved []unresolvedHost, khErr error, o vaultPushOpts) (vaultPushPlan, error) {
+	inv vault.Inventory, invErr error, kh localKnownHosts, unresolved []unresolvedHost, khErr error, o vaultPushOpts) (vaultPushPlan, error) {
 	var p vaultPushPlan
 	now := time.Now()
 
@@ -481,8 +485,9 @@ func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk loc
 		}
 	}
 
-	// known_hosts: the local view replaces the vault copy, so a partial view
-	// must never be uploaded silently.
+	// known_hosts: merged (mergeKnownHosts). This machine's lines replace the
+	// vault's for its own resolved hosts, so a partial view must never be
+	// uploaded silently.
 	b, found, err = getVaultItem(ctx, st, "known_hosts")
 	if err != nil {
 		return p, err
@@ -512,59 +517,94 @@ func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk loc
 			fmt.Sprintf("known_hosts: unchanged — no fleet host resolved here (%d unresolved); --allow-partial keeps all %d vault line(s)", len(unresolved), len(vk.Lines)),
 		}})
 	default:
-		lines := append([]string(nil), kh.Lines...)
-		var keptFor, noneFor []string
-		kept := 0
-		if len(unresolved) > 0 {
-			// --allow-partial: the vault's lines for hosts we could not
-			// resolve here are the only verified copy; keep them.
-			have := map[string]bool{}
-			for _, l := range lines {
-				have[l] = true
-			}
-			for _, u := range unresolved {
-				n := 0
-				for _, l := range vk.Lines {
-					if knownHostsLineMatches(l, u.Names) {
-						n++
-						if !have[l] {
-							have[l] = true
-							lines = append(lines, l)
-							kept++
-						}
-					}
-				}
-				if n > 0 {
-					keptFor = append(keptFor, u.Alias)
-				} else {
-					noneFor = append(noneFor, u.Alias)
-				}
-			}
-		}
-		sort.Strings(lines)
-		add, del := lineSetDiff(lines, vk.Lines)
+		m := mergeKnownHosts(kh, unresolved, vk.Lines)
+		add, del := lineSetDiff(m.lines, vk.Lines) // del: vault lines actually removed
 		it := pushItem{Name: "known_hosts", Version: b.Version}
 		if add == 0 && del == 0 {
 			it.Diff = []string{"known_hosts: unchanged"}
 		} else {
 			it.Changed = true
 			it.Diff = []string{fmt.Sprintf("known_hosts: +%d -%d lines", add, del)}
-			if it.Data, err = vault.Encode(vault.KnownHosts{Lines: lines}); err != nil {
+			if it.Data, err = vault.Encode(vault.KnownHosts{Lines: m.lines}); err != nil {
 				return p, err
 			}
 		}
+		if m.keptOther > 0 {
+			it.Diff = append(it.Diff, fmt.Sprintf("  kept %d vault line(s) for hosts this machine does not manage", m.keptOther))
+		}
 		if len(unresolved) > 0 {
 			it.Diff = append(it.Diff, fmt.Sprintf("  partial (--allow-partial): %d host(s) unresolved here: %s", len(unresolved), joinUnresolved(unresolved, "; ")))
-			if len(keptFor) > 0 {
-				it.Diff = append(it.Diff, fmt.Sprintf("  kept %d existing vault line(s) for: %s", kept, strings.Join(keptFor, ", ")))
+			if len(m.keptFor) > 0 {
+				it.Diff = append(it.Diff, fmt.Sprintf("  kept %d existing vault line(s) for: %s", m.keptUnresolved, strings.Join(m.keptFor, ", ")))
 			}
-			if len(noneFor) > 0 {
-				it.Diff = append(it.Diff, fmt.Sprintf("  the vault has no lines for: %s (they stay missing)", strings.Join(noneFor, ", ")))
+			if len(m.noneFor) > 0 {
+				it.Diff = append(it.Diff, fmt.Sprintf("  the vault has no lines for: %s (they stay missing)", strings.Join(m.noneFor, ", ")))
 			}
 		}
 		p.Items = append(p.Items, it)
 	}
 	return p, nil
+}
+
+// khMerge is mergeKnownHosts' result: the lines to store, and what was kept.
+type khMerge struct {
+	lines            []string
+	keptUnresolved   int      // vault lines kept for unresolved aliases
+	keptFor, noneFor []string // unresolved aliases with / without vault lines
+	keptOther        int      // vault lines kept for hosts this machine does not manage
+}
+
+// mergeKnownHosts is the vault's known_hosts after a push. Like the
+// inventory it is merge-only: the local lines, plus every vault line that
+// does not belong to one of this machine's RESOLVED fleet hosts (matched by
+// their names, hashed-aware). A resolved host's vault lines are replaced by
+// the local ones, so a rotated host key still updates. An unresolved alias's
+// vault lines are the only verified copy and are kept (--allow-partial).
+// Status compares against the same merge, so the two agree.
+func mergeKnownHosts(local localKnownHosts, unresolved []unresolvedHost, vaultLines []string) khMerge {
+	m := khMerge{lines: append([]string(nil), local.Lines...)}
+	have := map[string]bool{}
+	for _, l := range m.lines {
+		have[l] = true
+	}
+	keep := func(l string) bool {
+		if have[l] {
+			return false
+		}
+		have[l] = true
+		m.lines = append(m.lines, l)
+		return true
+	}
+	for _, u := range unresolved {
+		n := 0
+		for _, l := range vaultLines {
+			if knownHostsLineMatches(l, u.Names) {
+				n++
+				if keep(l) {
+					m.keptUnresolved++
+				}
+			}
+		}
+		if n > 0 {
+			m.keptFor = append(m.keptFor, u.Alias)
+		} else {
+			m.noneFor = append(m.noneFor, u.Alias)
+		}
+	}
+	var own []string
+	for _, h := range local.Resolved {
+		own = append(own, h.Names...)
+	}
+	for _, l := range vaultLines {
+		if have[l] || knownHostsLineMatches(l, own) {
+			continue
+		}
+		if keep(l) {
+			m.keptOther++
+		}
+	}
+	sort.Strings(m.lines)
+	return m
 }
 
 // knownHostsLineMatches reports whether a known_hosts line names any of names,

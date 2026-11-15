@@ -38,10 +38,10 @@ var (
 	// fleetInventory and fleetKnownHosts gather the local half of the
 	// vault's inventory and known_hosts items (status compares; push uploads).
 	fleetInventory  = inventoryFromConfig
-	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
+	fleetKnownHosts = func() (localKnownHosts, []unresolvedHost, error) {
 		hosts, err := fleetHosts()
 		if err != nil {
-			return vault.KnownHosts{}, nil, err
+			return localKnownHosts{}, nil, err
 		}
 		aliases := make([]string, 0, len(hosts))
 		for _, h := range hosts {
@@ -291,7 +291,8 @@ func vaultStatus(ctx context.Context, out io.Writer, cfg vault.Config) (ok bool)
 	case !hasKH:
 		fmt.Fprintln(out, "known_hosts: not in vault")
 	default:
-		add, del := lineSetDiff(lk.Lines, vk.Lines)
+		// The same merge push writes, so "0 lines differ" ⇔ "push: unchanged".
+		add, del := lineSetDiff(mergeKnownHosts(lk, unresolved, vk.Lines).lines, vk.Lines)
 		fmt.Fprintf(out, "known_hosts: in vault, %d lines differ\n", add+del)
 	}
 	return ok
@@ -438,6 +439,22 @@ type unresolvedHost struct {
 
 func (u unresolvedHost) String() string { return u.Alias + ": " + u.Reason }
 
+// fleetHostNames is a fleet alias that knownHostsFor resolved, with the
+// known_hosts lookup names it is known by (the alias plus ssh -G's
+// HostName/IPs). Push uses them to tell this machine's own vault lines from
+// other workstations'.
+type fleetHostNames struct {
+	Alias string
+	Names []string
+}
+
+// localKnownHosts is knownHostsFor's result: the lines, and the resolved
+// hosts they were collected for.
+type localKnownHosts struct {
+	vault.KnownHosts
+	Resolved []fleetHostNames
+}
+
 func joinUnresolved(us []unresolvedHost, sep string) string {
 	s := make([]string, len(us))
 	for i, u := range us {
@@ -460,9 +477,10 @@ func joinUnresolved(us []unresolvedHost, sep string) string {
 // (--allow-partial), or the vault silently loses those hosts. Errors: any
 // ssh-keygen failure other than exit 1 (= no entry, fine), and every alias
 // being unresolved (errNoAliasResolved, returned WITH the unresolved list).
-func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []unresolvedHost, error) {
+func knownHostsFor(x hostkey.Exec, aliases []string) (localKnownHosts, []unresolvedHost, error) {
 	seen := map[string]bool{}
 	var lines []string
+	var resolved []fleetHostNames
 	var unresolved []unresolvedHost
 	for _, a := range aliases {
 		t, err := hostkey.Resolve(x, a)
@@ -482,7 +500,7 @@ func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []unreso
 				out, err := x("ssh-keygen", "", "-F", n, "-f", file)
 				var ec interface{ ExitCode() int }
 				if err != nil && (!errors.As(err, &ec) || ec.ExitCode() != 1) {
-					return vault.KnownHosts{}, nil, fmt.Errorf("ssh-keygen -F %s: %w", n, err)
+					return localKnownHosts{}, nil, fmt.Errorf("ssh-keygen -F %s: %w", n, err)
 				}
 				for l := range strings.SplitSeq(out, "\n") {
 					if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "#") {
@@ -502,13 +520,15 @@ func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []unreso
 			unresolved = append(unresolved, unresolvedHost{Alias: a, Reason: bad, Names: names})
 		case !found:
 			unresolved = append(unresolved, unresolvedHost{Alias: a, Reason: "no known_hosts entry", Names: names})
+		default:
+			resolved = append(resolved, fleetHostNames{Alias: a, Names: names})
 		}
 	}
 	if len(aliases) > 0 && len(unresolved) == len(aliases) {
 		// The list rides along so push --allow-partial can still keep the
 		// vault's lines on a fresh machine where nothing resolves yet.
-		return vault.KnownHosts{}, unresolved, fmt.Errorf("%w (first: %s)", errNoAliasResolved, unresolved[0])
+		return localKnownHosts{}, unresolved, fmt.Errorf("%w (first: %s)", errNoAliasResolved, unresolved[0])
 	}
 	sort.Strings(lines)
-	return vault.KnownHosts{Lines: lines}, unresolved, nil
+	return localKnownHosts{KnownHosts: vault.KnownHosts{Lines: lines}, Resolved: resolved}, unresolved, nil
 }

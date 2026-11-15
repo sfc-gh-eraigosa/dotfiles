@@ -42,10 +42,28 @@ func pushEnv(t *testing.T, pass string) (vaultEnvT, pushKeyT) {
 	configure(t, "ws1")
 	k := writePushKey(t, e.home, pass)
 	fleetInventory = func() (vault.Inventory, error) { return vault.Inventory{Config: pushInventory}, nil }
-	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
-		return vault.KnownHosts{Lines: append([]string(nil), pushKnownHosts...)}, nil, nil
+	fleetKnownHosts = func() (localKnownHosts, []unresolvedHost, error) {
+		return pushLocalKH(), nil, nil
 	}
 	return e, k
+}
+
+// pushLocalKH is pushKnownHosts as this machine's resolved fleet hosts a
+// (10.0.0.1) and b (10.0.0.2) see them.
+func pushLocalKH() localKnownHosts {
+	k := localKH(append([]string(nil), pushKnownHosts...))
+	k.Resolved = []fleetHostNames{{Alias: "a", Names: []string{"a", "10.0.0.1"}}, {Alias: "b", Names: []string{"b", "10.0.0.2"}}}
+	return k
+}
+
+// localKH is a fleetKnownHosts result: lines, and ONE resolved host whose
+// names are names (none: no resolved host).
+func localKH(lines []string, names ...string) localKnownHosts {
+	k := localKnownHosts{KnownHosts: vault.KnownHosts{Lines: lines}}
+	if len(names) > 0 {
+		k.Resolved = []fleetHostNames{{Alias: names[0], Names: names}}
+	}
+	return k
 }
 
 func writePushKey(t *testing.T, home, pass string) pushKeyT {
@@ -319,8 +337,8 @@ func TestPushNeverIncludesAnExecDirective(t *testing.T) {
 
 func TestPushRefusesPartialKnownHostsWithoutFlag(t *testing.T) {
 	e, _ := pushEnv(t, pushTestPass)
-	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
-		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 AAAAKEYA"}}, []unresolvedHost{{Alias: "b", Reason: "no known_hosts entry", Names: []string{"b"}}, {Alias: "c", Reason: "ssh -G failed", Names: []string{"c"}}}, nil
+	fleetKnownHosts = func() (localKnownHosts, []unresolvedHost, error) {
+		return localKH([]string{"a ssh-ed25519 AAAAKEYA"}, "a"), []unresolvedHost{{Alias: "b", Reason: "no known_hosts entry", Names: []string{"b"}}, {Alias: "c", Reason: "ssh -G failed", Names: []string{"c"}}}, nil
 	}
 	out, err := runVault(t, "y\n"+pushTestPass+"\n", "push")
 	if err == nil {
@@ -529,8 +547,8 @@ func TestPushAllowPartialKeepsTheVaultLinesOfUnresolvedHosts(t *testing.T) {
 		hashedZ,
 		"z ssh-ed25519 AAAASTALE",
 	}})
-	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
-		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 AAAANEWA"}},
+	fleetKnownHosts = func() (localKnownHosts, []unresolvedHost, error) {
+		return localKH([]string{"a ssh-ed25519 AAAANEWA"}, "a", "10.0.0.1"),
 			[]unresolvedHost{{Alias: "b", Reason: "no known_hosts entry", Names: []string{"b", "10.0.0.2", "[b]:2222"}}}, nil
 	}
 	out, err := runVault(t, "y\n"+pushTestPass+"\n", "push", "--allow-partial")
@@ -542,12 +560,14 @@ func TestPushAllowPartialKeepsTheVaultLinesOfUnresolvedHosts(t *testing.T) {
 	for _, l := range kh.Lines {
 		got[l] = true
 	}
-	for _, want := range []string{"a ssh-ed25519 AAAANEWA", "b,10.0.0.2 ssh-ed25519 AAAAKEYB", "[b]:2222 ssh-ed25519 AAAAPORTB", hashedB} {
+	// z is no fleet host of this machine: its lines belong to another
+	// workstation and are kept too (F2, PR #452 round 2).
+	for _, want := range []string{"a ssh-ed25519 AAAANEWA", "b,10.0.0.2 ssh-ed25519 AAAAKEYB", "[b]:2222 ssh-ed25519 AAAAPORTB", hashedB, hashedZ, "z ssh-ed25519 AAAASTALE"} {
 		if !got[want] {
 			t.Errorf("missing %q in %v", want, kh.Lines)
 		}
 	}
-	for _, gone := range []string{"a ssh-ed25519 AAAAOLDA", hashedZ, "z ssh-ed25519 AAAASTALE"} {
+	for _, gone := range []string{"a ssh-ed25519 AAAAOLDA"} {
 		if got[gone] {
 			t.Errorf("kept %q", gone)
 		}
@@ -617,8 +637,8 @@ func TestPushEncryptLocalConflictRetryRewritesOnce(t *testing.T) {
 
 func TestPushDeclinedWithWithheldKnownHostsExitsNonZero(t *testing.T) {
 	e, _ := pushEnv(t, pushTestPass)
-	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
-		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 AAAAKEYA"}}, []unresolvedHost{{Alias: "b", Reason: "no known_hosts entry", Names: []string{"b"}}}, nil
+	fleetKnownHosts = func() (localKnownHosts, []unresolvedHost, error) {
+		return localKH([]string{"a ssh-ed25519 AAAAKEYA"}, "a"), []unresolvedHost{{Alias: "b", Reason: "no known_hosts entry", Names: []string{"b"}}}, nil
 	}
 	out, err := runVault(t, "n\n", "push")
 	if err == nil {
@@ -683,8 +703,8 @@ func TestPushAllowPartialOnAFreshHostKeepsEveryVaultLine(t *testing.T) {
 	vaultLines := []string{"a ssh-ed25519 AAAAKEYA", "b ssh-ed25519 AAAAKEYB", "old ssh-ed25519 AAAAOLD"}
 	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: vaultLines})
 	unresolved := []unresolvedHost{{Alias: "a", Reason: "no known_hosts entry", Names: []string{"a"}}, {Alias: "b", Reason: "no known_hosts entry", Names: []string{"b"}}}
-	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
-		return vault.KnownHosts{}, unresolved, fmt.Errorf("%w (first: a: no known_hosts entry)", errNoAliasResolved)
+	fleetKnownHosts = func() (localKnownHosts, []unresolvedHost, error) {
+		return localKnownHosts{}, unresolved, fmt.Errorf("%w (first: a: no known_hosts entry)", errNoAliasResolved)
 	}
 
 	out, err := runVault(t, "y\n"+pushTestPass+"\n", "push")
@@ -763,5 +783,56 @@ func assertNoUnlandedVerb(t *testing.T, out string) {
 		if strings.Contains(out, v) {
 			t.Fatalf("names %q, which does not exist yet:\n%s", v, out)
 		}
+	}
+}
+
+// F2: known_hosts is merge-only like the inventory. The vault's lines for a
+// host this machine does not manage (x) are kept, plain or hashed; the lines
+// for this machine's own resolved host (b) are replaced by the local ones, so
+// a rotated host key still updates, and "-N" counts only those.
+func TestPushKeepsOtherWorkstationsKnownHosts(t *testing.T) {
+	e, _ := pushEnv(t, pushTestPass)
+	hashedX := knownhosts.HashHostname("10.0.0.77") + " ssh-ed25519 AAAAHASHEDX"
+	hashedOldB := knownhosts.HashHostname("10.0.0.2") + " ssh-ed25519 AAAAOLDB2"
+	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: []string{
+		"a ssh-ed25519 AAAAKEYA",
+		"b ssh-ed25519 AAAAOLDB",
+		hashedOldB,
+		"x ssh-ed25519 AAAAKEYX",
+		hashedX,
+	}})
+	out, err := runVault(t, "y\n"+pushTestPass+"\n", "push")
+	if err != nil {
+		t.Fatalf("push: %v\n%s", err, out)
+	}
+	kh := getItem[vault.KnownHosts](t, e.store, "known_hosts")
+	got := map[string]bool{}
+	for _, l := range kh.Lines {
+		got[l] = true
+	}
+	for _, want := range []string{"a ssh-ed25519 AAAAKEYA", "b ssh-ed25519 AAAAKEYB", "x ssh-ed25519 AAAAKEYX", hashedX} {
+		if !got[want] {
+			t.Errorf("missing %q in %v", want, kh.Lines)
+		}
+	}
+	for _, gone := range []string{"b ssh-ed25519 AAAAOLDB", hashedOldB} {
+		if got[gone] {
+			t.Errorf("kept b's old line %q", gone)
+		}
+	}
+	if len(kh.Lines) != 4 {
+		t.Fatalf("want 4 lines, got %v", kh.Lines)
+	}
+	for _, want := range []string{"known_hosts: +1 -2 lines", "kept 2 vault line(s) for hosts this machine does not manage"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	// status agrees with push: nothing left to push
+	if out, err := runVault(t, "", "status"); err != nil || !strings.Contains(out, "known_hosts: in vault, 0 lines differ") {
+		t.Fatalf("status disagrees: %v\n%s", err, out)
+	}
+	if out, _ := runVault(t, "", "push"); !strings.Contains(out, "known_hosts: unchanged") {
+		t.Fatalf("second push is not a no-op:\n%s", out)
 	}
 }

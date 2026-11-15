@@ -36,7 +36,7 @@ func vaultEnv(t *testing.T, enabled bool) vaultEnvT {
 	vaultSettings = func() featflag.Settings { return featflag.Settings{VaultEnabled: enabled} }
 	agentLoaded = func(context.Context, string) (bool, error) { return false, agent.ErrNoAgent }
 	fleetInventory = func() (vault.Inventory, error) { return vault.Inventory{}, nil }
-	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) { return vault.KnownHosts{}, nil, nil }
+	fleetKnownHosts = func() (localKnownHosts, []unresolvedHost, error) { return localKnownHosts{}, nil, nil }
 	return vaultEnvT{home: home, store: st}
 }
 
@@ -298,8 +298,8 @@ func TestStatusReportsEachFacet(t *testing.T) {
 	fleetInventory = func() (vault.Inventory, error) {
 		return vault.Inventory{Config: "Host a\n  HostName 1.1.1.1\n\nHost c\n  HostName 3.3.3.3\n"}, nil
 	}
-	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
-		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 K1", "c ssh-ed25519 K3"}}, nil, nil
+	fleetKnownHosts = func() (localKnownHosts, []unresolvedHost, error) {
+		return localKH([]string{"a ssh-ed25519 K1", "c ssh-ed25519 K3"}, "a", "c"), nil, nil
 	}
 	agentLoaded = func(_ context.Context, got string) (bool, error) { return got == fp, nil }
 
@@ -314,7 +314,7 @@ func TestStatusReportsEachFacet(t *testing.T) {
 		"roster: active",
 		"loaded in agent",
 		"inventory: in vault, 1 host(s) to push",
-		"known_hosts: in vault, 2 lines differ",
+		"known_hosts: in vault, 1 lines differ", // + c; b's line is another workstation's, kept (F2)
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
@@ -483,8 +483,8 @@ func TestStatusShowsKnownHostsErrorAndKeepsGoing(t *testing.T) {
 	configure(t, "ws1")
 	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: []string{"a k"}})
 	putBlob(t, e.store, "inventory", vault.Inventory{})
-	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
-		return vault.KnownHosts{}, nil, errors.New("ssh-keygen: not found")
+	fleetKnownHosts = func() (localKnownHosts, []unresolvedHost, error) {
+		return localKnownHosts{}, nil, errors.New("ssh-keygen: not found")
 	}
 	out, err := runVault(t, "", "status")
 	if err != nil || !strings.Contains(out, "known_hosts: local fleet lines unreadable: ssh-keygen: not found") || !strings.Contains(out, "inventory:") {
@@ -549,8 +549,8 @@ func TestStatusShowsUnresolvedFleetHosts(t *testing.T) {
 	e := vaultEnv(t, true)
 	configure(t, "ws1")
 	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: []string{"a k"}})
-	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
-		return vault.KnownHosts{Lines: []string{"a k"}}, []unresolvedHost{{Alias: "b", Reason: "no route"}, {Alias: "c", Reason: "no route"}}, nil
+	fleetKnownHosts = func() (localKnownHosts, []unresolvedHost, error) {
+		return localKH([]string{"a k"}, "a"), []unresolvedHost{{Alias: "b", Reason: "no route"}, {Alias: "c", Reason: "no route"}}, nil
 	}
 	out, err := runVault(t, "", "status")
 	if err != nil || !strings.Contains(out, "known_hosts: in vault, 0 lines differ") || !strings.Contains(out, "known_hosts: 2 fleet host(s) unresolved: b: no route, c: no route") {
