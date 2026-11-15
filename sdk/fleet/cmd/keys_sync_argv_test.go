@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -45,7 +46,8 @@ func TestNoVaultMeansTodaysKeysSyncArgv(t *testing.T) {
 			}
 		}
 	}
-	got := strings.Join(sent, "\n") + "\n"
+	// The remote backup name carries the wall clock; pin it so the golden is stable.
+	got := backupStampRE.ReplaceAllString(strings.Join(sent, "\n")+"\n", ".bak-STAMP")
 
 	golden := filepath.Join("testdata", "keys_sync_argv.golden")
 	if os.Getenv("FLEET_UPDATE_GOLDEN") == "1" {
@@ -64,3 +66,5 @@ func TestNoVaultMeansTodaysKeysSyncArgv(t *testing.T) {
 		t.Fatalf("keys sync argv changed with no vault configured.\n got: %q\nwant: %q", got, want)
 	}
 }
+
+var backupStampRE = regexp.MustCompile(`\.bak-[0-9]{8}T[0-9]{6}Z`)
