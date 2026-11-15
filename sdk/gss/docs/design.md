@@ -737,6 +737,12 @@ Promote a draft PR to ready-for-review. By default, gss refuses to promote a
 non-bottom PR while its parent is still draft (this would surprise reviewers
 who expect the bottom merged first). `--force` overrides.
 
+`--merge` (with `--ready`) also adds the `ready-for-merge` label the Mergify
+queue lands, under the same token check — one approval ships the PR, and
+queueing a worker PR never needs a hand `gh pr edit`. On a PR that is already
+open it skips `gh pr ready` and only adds the label. The token is minted by
+the human, never the assistant (skill: "The approval handshake").
+
 ### `gss feature rebase`
 
 Convenience: rebase the current worker on its current `base_branch` and

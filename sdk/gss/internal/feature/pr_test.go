@@ -190,3 +190,70 @@ func TestPromoteReady_BlocksOnDraftParent_WordlistSuffixPurpose(t *testing.T) {
 		}
 	}
 }
+
+// --merge queues the PR for Mergify under the same token check: promote,
+// then add the ready-for-merge label. Without a token neither happens.
+func TestPromoteReady_MergeLabelsAfterPromote(t *testing.T) {
+	ap := &fakeApprover{}
+	ghc := ghWithReadyable(42)
+	svc, _ := readyService(t, ap, []registry.Worker{bottomWorker()}, ghc)
+
+	if err := svc.PromoteReady(context.Background(), feature.ReadyOpts{WorkerRef: "auth/erai/api", Merge: true}); err != nil {
+		t.Fatalf("PromoteReady --merge: %v", err)
+	}
+	var verbs []string
+	labelled := false
+	for _, c := range ghc.Calls() {
+		verbs = append(verbs, c.Verb)
+		if c.Verb == ghfake.VerbPREdit && c.Num == 42 && len(c.EditOpts.AddLabels) == 1 && c.EditOpts.AddLabels[0] == feature.MergeLabel {
+			labelled = true
+		}
+	}
+	if !labelled {
+		t.Errorf("expected PREdit(42, AddLabels=[%s]); calls = %v", feature.MergeLabel, verbs)
+	}
+	if ap.calls != 1 {
+		t.Errorf("approval calls = %d; want exactly 1 (one token covers promote + label)", ap.calls)
+	}
+}
+
+func TestPromoteReady_MergeRefusesWithoutToken(t *testing.T) {
+	ap := &fakeApprover{err: errors.ErrApprovalTokenMissing}
+	ghc := ghWithReadyable(42)
+	svc, _ := readyService(t, ap, []registry.Worker{bottomWorker()}, ghc)
+
+	err := svc.PromoteReady(context.Background(), feature.ReadyOpts{WorkerRef: "auth/erai/api", Merge: true})
+	if !stderrors.Is(err, errors.ErrPRReadyNeedsToken) {
+		t.Fatalf("err = %v; want ErrPRReadyNeedsToken", err)
+	}
+	for _, c := range ghc.Calls() {
+		if c.Verb == ghfake.VerbPRReady || c.Verb == ghfake.VerbPREdit {
+			t.Errorf("gh %s ran without a token", c.Verb)
+		}
+	}
+}
+
+// An already-ready (open) PR is not re-promoted; --merge only labels it.
+func TestPromoteReady_MergeOnOpenPROnlyLabels(t *testing.T) {
+	ap := &fakeApprover{}
+	ghc := ghWithReadyable(42)
+	w := bottomWorker()
+	w.PRState = "open"
+	svc, _ := readyService(t, ap, []registry.Worker{w}, ghc)
+
+	if err := svc.PromoteReady(context.Background(), feature.ReadyOpts{WorkerRef: "auth/erai/api", Merge: true}); err != nil {
+		t.Fatalf("PromoteReady --merge on open PR: %v", err)
+	}
+	labelled := false
+	for _, c := range ghc.Calls() {
+		if c.Verb == ghfake.VerbPRReady {
+			t.Error("open PR was re-promoted")
+		}
+		if c.Verb == ghfake.VerbPREdit && len(c.EditOpts.AddLabels) > 0 {
+			labelled = true
+		}
+	}
+	if !labelled {
+		t.Error("open PR was not labelled")
+	}
+}

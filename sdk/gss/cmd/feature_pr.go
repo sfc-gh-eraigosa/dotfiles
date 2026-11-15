@@ -12,14 +12,22 @@ import (
 var (
 	featurePRReady  bool
 	featurePRForce  bool
+	featurePRMerge  bool
 	featurePRWorker string
 )
 
 var featurePRCmd = &cobra.Command{
 	Use:   "pr",
-	Short: "Promote the worker's draft PR to ready-for-review (--ready)",
-	Long: `Promote a draft PR to ready-for-review with --ready. Always gated on the
-approval token (refused without it). By default gss refuses to promote a
+	Short: "Promote the worker's draft PR to ready-for-review (--ready), and queue it (--merge)",
+	Long: `Promote a draft PR to ready-for-review with --ready. --merge also labels it
+ready-for-merge so the Mergify queue lands it — the one gss step for "ship
+it"; never add that label with gh pr edit. On a PR that is already ready,
+--ready --merge only adds the label.
+
+Always gated on the approval token (refused without it). The token is the
+HUMAN's approval: the person runs
+  git rev-parse HEAD > ~/.config/gss/approval.token
+and an assistant never writes it. By default gss refuses to promote a
 non-bottom PR while its parent is still draft; --force overrides that guard
 (not the token gate). Resolves the worker from cwd unless --worker is given.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -38,16 +46,20 @@ non-bottom PR while its parent is still draft; --force overrides that guard
 				fail(err)
 			}
 		}
-		if err := svc.PromoteReady(context.Background(), feature.ReadyOpts{WorkerRef: ref, Force: featurePRForce}); err != nil {
+		if err := svc.PromoteReady(context.Background(), feature.ReadyOpts{WorkerRef: ref, Force: featurePRForce, Merge: featurePRMerge}); err != nil {
 			fail(err)
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Promoted %s to ready-for-review\n", ref)
+		if featurePRMerge {
+			fmt.Fprintf(cmd.OutOrStdout(), "Labelled %s %s — the merge queue lands it once checks pass\n", ref, feature.MergeLabel)
+		}
 	},
 }
 
 func init() {
 	f := featurePRCmd.Flags()
 	f.BoolVar(&featurePRReady, "ready", false, "Promote the draft PR to ready-for-review")
+	f.BoolVar(&featurePRMerge, "merge", false, "With --ready: also label the PR ready-for-merge (Mergify queue)")
 	f.BoolVar(&featurePRForce, "force", false, "Override the parent-still-draft guard (not the token gate)")
 	f.StringVar(&featurePRWorker, "worker", "", "Worker ref (default: resolved from cwd)")
 	featureCmd.AddCommand(featurePRCmd)

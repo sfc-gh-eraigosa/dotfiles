@@ -210,6 +210,18 @@ func TestPREdit_Args(t *testing.T) {
 	}
 }
 
+func TestPREdit_AddLabelsArgs(t *testing.T) {
+	stub := &stubExec{}
+	c := gh.NewClientWithExec(stub)
+	if err := c.PREdit(context.Background(), 24, gh.PREditOpts{AddLabels: []string{"ready-for-merge", "fix"}}); err != nil {
+		t.Fatalf("PREdit: %v", err)
+	}
+	want := []string{"pr", "edit", "24", "--add-label", "ready-for-merge,fix"}
+	if !reflect.DeepEqual(stub.calls[0], want) {
+		t.Errorf("argv = %q; want %q", stub.calls[0], want)
+	}
+}
+
 func TestPREdit_EmptyInputRejected(t *testing.T) {
 	c := gh.NewClientWithExec(&stubExec{})
 	if err := c.PREdit(context.Background(), 0, gh.PREditOpts{Base: "main"}); err == nil {

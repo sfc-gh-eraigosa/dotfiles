@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/errors"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/identity"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/registry"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/stack"
@@ -15,10 +16,16 @@ type approver interface {
 	Verify(ctx context.Context, repoPath string, forceAutonomous bool) error
 }
 
-// ReadyOpts configures `feature pr --ready`.
+// MergeLabel is the label the Mergify queue lands (docs/mergify.md).
+const MergeLabel = "ready-for-merge"
+
+// ReadyOpts configures `feature pr --ready [--merge]`.
 type ReadyOpts struct {
 	WorkerRef string
 	Force     bool // override the parent-still-draft guard (not the token gate)
+	// Merge also applies MergeLabel after promoting, under the SAME token
+	// check — so queueing a worker PR never needs a hand `gh pr edit`.
+	Merge bool
 }
 
 // PromoteReady promotes a worker's draft PR to ready-for-review (design.md
@@ -61,9 +68,19 @@ func (s *Service) PromoteReady(ctx context.Context, opts ReadyOpts) error {
 		}
 	}
 
-	// 3. Promote.
-	if err := s.GH.PRReady(ctx, prNumber(w.PRURL)); err != nil {
-		return fmt.Errorf("feature pr --ready: %w", err)
+	// 3. Promote (a PR already open is left as it is — --merge on it only
+	//    adds the label).
+	num := prNumber(w.PRURL)
+	if w.PRState == "" || w.PRState == "draft" {
+		if err := s.GH.PRReady(ctx, num); err != nil {
+			return fmt.Errorf("feature pr --ready: %w", err)
+		}
+	}
+	// 4. Queue for merge, under the token already verified above.
+	if opts.Merge {
+		if err := s.GH.PREdit(ctx, num, gh.PREditOpts{AddLabels: []string{MergeLabel}}); err != nil {
+			return fmt.Errorf("feature pr --merge: %w", err)
+		}
 	}
 	return s.Store.Update(func(r *registry.Registry) error {
 		f, wIdx := findWorker(*r, ref)

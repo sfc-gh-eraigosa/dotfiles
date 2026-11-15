@@ -143,8 +143,8 @@ func (c *SystemClient) PRCreate(ctx context.Context, opts PRCreateOpts) (PR, err
 	}, nil
 }
 
-// PREdit updates a PR's base and/or body. num must be > 0 and at least one
-// of Base / Body / BodyFile must be set.
+// PREdit updates a PR's base, body and/or labels. num must be > 0 and at
+// least one of Base / Body / BodyFile / AddLabels must be set.
 func (c *SystemClient) PREdit(ctx context.Context, num int, opts PREditOpts) error {
 	if num <= 0 {
 		return fmt.Errorf("gh: PREdit requires num > 0, got %d", num)
@@ -154,8 +154,11 @@ func (c *SystemClient) PREdit(ctx context.Context, num int, opts PREditOpts) err
 		args = append(args, "--base", opts.Base)
 	}
 	args = append(args, bodyArgs(opts.BodyFile, opts.Body, false)...)
+	if len(opts.AddLabels) > 0 {
+		args = append(args, "--add-label", strings.Join(opts.AddLabels, ","))
+	}
 	if len(args) == 3 {
-		return fmt.Errorf("gh: PREdit requires at least one of Base, Body, BodyFile")
+		return fmt.Errorf("gh: PREdit requires at least one of Base, Body, BodyFile, AddLabels")
 	}
 	if _, err := c.exec.Run(ctx, args...); err != nil {
 		return fmt.Errorf("gh pr edit %d: %w", num, err)
