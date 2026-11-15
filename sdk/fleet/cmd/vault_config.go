@@ -24,6 +24,9 @@ type vaultFile struct {
 	Key         string `yaml:"key,omitempty"`
 }
 
+// osHostname is a test seam for the default workstation name.
+var osHostname = os.Hostname
+
 // vaultConfigPath is $XDG_CONFIG_HOME/fleet/vault.yaml, else
 // ~/.config/fleet/vault.yaml, on every OS. (fleetConfigFile would send macOS to
 // ~/Library/Application Support; the vault contract pins the XDG location.)
@@ -98,7 +101,8 @@ func saveVaultConfig(path string, c vault.Config) error {
 
 // applyVaultDefaults fills the provider-specific vault name, the short
 // hostname workstation and the default key path (with "~" expanded). An
-// unknown provider is an error. Shared by loadVaultConfig and `vault setup`.
+// unknown provider, and a workstation that resolves to "", are errors.
+// Shared by loadVaultConfig and `vault setup`.
 func applyVaultDefaults(c vault.Config) (vault.Config, error) {
 	switch c.Provider {
 	case "op":
@@ -113,8 +117,15 @@ func applyVaultDefaults(c vault.Config) (vault.Config, error) {
 		return vault.Config{}, fmt.Errorf("unknown provider %q (want \"op\" or \"lpass\")", c.Provider)
 	}
 	if c.Workstation == "" {
-		h, _ := os.Hostname()
-		c.Workstation, _, _ = strings.Cut(h, ".")
+		// An empty name would make the vault item "key/".
+		const fix = "pass --workstation to `fleet vault setup` (or set workstation: in vault.yaml)"
+		h, err := osHostname()
+		if err != nil {
+			return vault.Config{}, fmt.Errorf("no workstation name: reading the hostname: %w; %s", err, fix)
+		}
+		if c.Workstation, _, _ = strings.Cut(h, "."); c.Workstation == "" {
+			return vault.Config{}, fmt.Errorf("no workstation name: the hostname %q has no short name; %s", h, fix)
+		}
 	}
 	if c.Key == "" {
 		c.Key = "~/.ssh/id_ed25519"

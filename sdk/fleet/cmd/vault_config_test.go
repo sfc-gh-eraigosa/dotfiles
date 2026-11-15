@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,5 +152,33 @@ func TestVaultConfigEmptyFileIsAMissingProviderError(t *testing.T) {
 	_, ok, err := loadVaultConfig(writeVaultYAML(t, "", 0o600))
 	if ok || err == nil || !strings.Contains(err.Error(), "unknown provider") {
 		t.Fatalf("got ok=%v err=%v, want the unknown-provider error", ok, err)
+	}
+}
+
+// F6 (PR #452 round 2): an empty workstation would name the vault item
+// "key/"; the hostname error is surfaced, and a hostname with an empty short
+// name is refused.
+func TestVaultConfigRefusesAnEmptyWorkstation(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	orig := osHostname
+	t.Cleanup(func() { osHostname = orig })
+	for _, tc := range []struct {
+		name string
+		host func() (string, error)
+		want string
+	}{
+		{"hostname error", func() (string, error) { return "", errors.New("uname failed") }, "uname failed"},
+		{"empty short name", func() (string, error) { return ".x", nil }, "--workstation"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			osHostname = tc.host
+			_, err := applyVaultDefaults(vault.Config{Provider: "lpass"})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want an error containing %q, got %v", tc.want, err)
+			}
+			if _, err := applyVaultDefaults(vault.Config{Provider: "lpass", Workstation: "w1"}); err != nil {
+				t.Fatalf("an explicit workstation must not need the hostname: %v", err)
+			}
+		})
 	}
 }
