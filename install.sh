@@ -341,7 +341,6 @@ if gff_on install.git.hooks; then
   if [ -f "${BASE_DIR}/opt/scripts/git/install_git_hooks.sh" ]; then
     "${BASE_DIR}/opt/scripts/git/install_git_hooks.sh"
   fi
-  if command -v gss >/dev/null 2>&1; then gss hooks check --fix || true; fi # unset repo-local core.hooksPath overrides that switch these hooks off
 else gff_skip_msg install.git.hooks; fi
 
 # gitleaks: the broad, upstream-maintained secret ruleset the privacy guard
@@ -1000,6 +999,7 @@ if gff_on install.sdk.gss; then
     fi
   fi
 else gff_skip_msg install.sdk.gss; fi
+if gff_on install.git.hooks && [ -x "${HOME}/opt/bin/gss" ]; then "${HOME}/opt/bin/gss" hooks check --fix || true; fi # after the build, so this run's gss has the verb: unset repo-local core.hooksPath overrides that switch the privacy hooks off
 
 # build and install tmux-mg
 if gff_on install.sdk.tmux-mgr; then
