@@ -101,7 +101,7 @@ func Discover(ctx context.Context, r git.Runner, worktrees, parents []string) []
 // Summary is what CheckAll found.
 type Summary struct {
 	Checked   int
-	Fixed     int
+	Fixed     int // core.hooksPath values removed
 	Remaining int // overrides still in place (redundant without --fix, foreign, unfixable)
 	Errors    int // paths that could not be inspected or fixed
 }
@@ -127,23 +127,26 @@ func CheckAll(ctx context.Context, r git.Runner, repos []string, fix bool, out i
 			continue
 		}
 		if fix && res.Fixable() {
-			// A fix can uncover a second redundant value in another scope
-			// (worktree, then local); keep going while each one is fixable.
-			after, err := Fix(ctx, r, res)
-			for n := 0; err == nil && after.Fixable() && n < 4; n++ {
-				after, err = Fix(ctx, r, after)
+			// A fix can uncover a second value in another scope (worktree, then
+			// local). Every value removed gets its own line and counts once, so
+			// nothing is changed without saying so, in whatever order repos come.
+			var err error
+			for n := 0; err == nil && res.Fixable() && n < 4; n++ {
+				var after Result
+				if after, err = Fix(ctx, r, res); err == nil {
+					s.Fixed++
+					fmt.Fprintf(out, "fixed      %s: removed core.hooksPath = %q (%s config)\n", repo, res.Value, res.Scope)
+					res = after
+				}
 			}
 			if err != nil {
 				s.Errors++
 				fmt.Fprintf(out, "error      %s: %v\n", repo, err)
 				continue
 			}
-			if after.Kind == OK {
-				s.Fixed++
-				fmt.Fprintf(out, "fixed      %s: removed core.hooksPath = %q (%s config); the global hooks run here now\n", repo, res.Value, res.Scope)
+			if res.Kind == OK {
 				continue
 			}
-			res = after // something else still overrides (e.g. a second scope)
 		}
 		s.Remaining++
 		switch {

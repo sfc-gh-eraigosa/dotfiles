@@ -12,9 +12,11 @@
 //
 //   - OK: no override (unset, no global value to override, or the same path
 //     as the global value).
-//   - Redundant: the repo points at its own hooks dir (<git common dir>/hooks
-//     or <git dir>/hooks). The global hooks already run that dir's hook of the
-//     same name after their check, so unsetting the value loses nothing.
+//   - Redundant: the repo points at its own hooks dir (<git common dir>/hooks,
+//     the only one the global hooks chain to). The global hooks already run
+//     that dir's hook of the same name after their check, so unsetting the
+//     value loses nothing. A linked worktree's <git dir>/hooks is not chained,
+//     so a value pointing there is foreign.
 //   - Foreign: anything else (.husky/_, /dev/null, another tool's dir). Those
 //     hooks matter to someone, so gss never removes them; the owner chains
 //     them instead.
@@ -159,29 +161,21 @@ func Inspect(ctx context.Context, r git.Runner, dir string) (Result, error) {
 	if base == "" {
 		base = gitDir // bare repo: hooks run with the git dir as cwd
 	}
-	eff := resolve(res.Value, base)
-	if eff == resolve(res.Global, base) {
+	// An empty value is an override of its own (no hooks dir at all), never a
+	// path: resolving it would read it as the base directory.
+	if res.Value != "" && resolve(res.Value, base) == resolve(res.Global, base) {
 		return res, nil
 	}
-	own := []string{res.HooksDir}
-	if gitDir != "" {
-		own = append(own, filepath.Join(gitDir, "hooks"))
-	}
-	isOwn := func(p string) bool {
-		for _, h := range own {
-			if p == canonical(h) {
-				return true
-			}
-		}
-		return false
-	}
+	// Only <git common dir>/hooks is the repo's own: the global hooks chain
+	// to it, and to no linked worktree's <git dir>/hooks.
+	isOwn := func(v string) bool { return v != "" && resolve(v, base) == canonical(res.HooksDir) }
 	res.Kind = Foreign
-	if isOwn(eff) {
+	if isOwn(res.Value) {
 		res.Kind = Redundant
 	}
 	res.ownOnly = true
 	for _, v := range res.Values {
-		if !isOwn(resolve(v, base)) {
+		if !isOwn(v) {
 			res.ownOnly = false
 		}
 	}

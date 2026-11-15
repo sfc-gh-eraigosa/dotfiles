@@ -219,7 +219,7 @@ func TestScanFindsUnregisteredWorktreeAndFixesBothScopes(t *testing.T) {
 	}
 	var out strings.Builder
 	s := CheckAll(ctx, r, []string{wt}, true, &out)
-	if s.Fixed != 1 || s.Remaining != 0 {
+	if s.Fixed != 2 || s.Remaining != 0 {
 		t.Fatalf("one pass: %+v\n%s", s, out.String())
 	}
 }
@@ -232,5 +232,52 @@ func TestApproverPassesANonRepo(t *testing.T) {
 	a := Approver{Inner: inner, Git: git.NewSystemRunner()}
 	if err := a.Verify(context.Background(), filepath.Join(root, "nope"), false); err != nil || inner.calls != 1 {
 		t.Fatalf("non-repo: err=%v calls=%d", err, inner.calls)
+	}
+}
+
+// A linked worktree's own <git dir>/hooks is not chained by the global hooks,
+// so a value pointing there is foreign and never removed.
+func TestLinkedWorktreeGitDirHooksIsForeign(t *testing.T) {
+	root, _ := env(t, true)
+	ctx, r := context.Background(), git.NewSystemRunner()
+	main := newRepo(t, filepath.Join(root, "main"))
+	commit(t, main)
+	wt := filepath.Join(root, "wt")
+	gitc(t, main, "worktree", "add", "-q", "-b", "w", wt)
+	gitc(t, main, "config", "--local", Key, filepath.Join(main, ".git", "worktrees", "wt", "hooks"))
+	res, err := Inspect(ctx, r, wt)
+	if err != nil || res.Kind != Foreign || res.Fixable() {
+		t.Fatalf("want foreign, not fixable: %+v %v", res, err)
+	}
+}
+
+// An empty value stays an override even in the global hooks dir's own repo,
+// where resolving "" as a path would land on the global value.
+func TestEmptyValueInTheGlobalHooksRepo(t *testing.T) {
+	_, globalHooks := env(t, true)
+	repo := newRepo(t, globalHooks)
+	gitc(t, repo, "config", "--local", Key, "")
+	res, err := Inspect(context.Background(), git.NewSystemRunner(), repo)
+	if err != nil || res.Kind != Foreign {
+		t.Fatalf("want foreign, got %+v %v", res, err)
+	}
+}
+
+// When a fix uncovers a foreign value in another scope, the removal is still
+// reported and counted, and the foreign value remains.
+func TestCheckAllReportsAFixThatUncoversAForeignValue(t *testing.T) {
+	root, _ := env(t, true)
+	ctx, r := context.Background(), git.NewSystemRunner()
+	main := newRepo(t, filepath.Join(root, "main"))
+	commit(t, main)
+	wt := filepath.Join(root, "wt")
+	gitc(t, main, "worktree", "add", "-q", "-b", "w", wt)
+	gitc(t, main, "config", "extensions.worktreeConfig", "true")
+	gitc(t, main, "config", "--local", Key, ".husky/_")
+	gitc(t, wt, "config", "--worktree", Key, filepath.Join(main, ".git", "hooks"))
+	var out strings.Builder
+	s := CheckAll(ctx, r, []string{wt}, true, &out)
+	if s.Fixed != 1 || s.Remaining != 1 || !strings.Contains(out.String(), "fixed      "+wt) || !strings.Contains(out.String(), "foreign    "+wt) {
+		t.Fatalf("%+v\n%s", s, out.String())
 	}
 }
