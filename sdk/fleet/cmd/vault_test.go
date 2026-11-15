@@ -557,3 +557,24 @@ func TestStatusShowsUnresolvedFleetHosts(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 }
+
+// F3 (PR #452 round 2): a multi-alias #fleet Host line is in the inventory
+// under its first alias, the name fleetHosts gives it.
+func TestFleetInventoryKeepsAMultiAliasHost(t *testing.T) {
+	e := vaultEnv(t, true)
+	cfgPath := filepath.Join(e.home, "ssh_config")
+	body := "Host nas nas.lan #fleet\n  HostName 10.0.0.5\n\nHost one #fleet\n  HostName 10.0.0.6\n"
+	if err := os.WriteFile(cfgPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oc, om := flagConfig, flagMarker
+	t.Cleanup(func() { flagConfig, flagMarker = oc, om })
+	flagConfig, flagMarker = cfgPath, "#fleet"
+	inv, err := inventoryFromConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(inv.Config, "Host nas nas.lan") || !strings.Contains(inv.Config, "10.0.0.5") || !strings.Contains(inv.Config, "Host one") {
+		t.Fatalf("multi-alias host dropped:\n%s", inv.Config)
+	}
+}

@@ -391,7 +391,9 @@ func inventoryFromConfig() (vault.Inventory, error) {
 
 type hostBlock struct{ alias, text string }
 
-// hostBlocks splits ssh_config text into its single-alias Host blocks.
+// hostBlocks splits ssh_config text into its Host blocks, each keyed by its
+// FIRST alias (`Host nas nas.lan` is "nas"), the name sshconf.Parse and so
+// fleetHosts give it. Match blocks are not Host blocks.
 func hostBlocks(cfg string) []hostBlock {
 	var out []hostBlock
 	var cur []string
@@ -407,7 +409,7 @@ func hostBlocks(cfg string) []hostBlock {
 		f := strings.Fields(code)
 		if len(f) > 0 && (strings.EqualFold(f[0], "host") || strings.EqualFold(f[0], "match")) {
 			flush()
-			if strings.EqualFold(f[0], "host") && len(f) == 2 {
+			if strings.EqualFold(f[0], "host") && len(f) >= 2 {
 				alias = f[1]
 			}
 		}
