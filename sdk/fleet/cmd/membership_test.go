@@ -177,3 +177,22 @@ func TestWriteConfigSkipsTheBackupOfAnEmptyFile(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteConfigWritesThroughASymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real")
+	link := filepath.Join(dir, "config")
+	mustWriteFile(t, real, []byte("Host a\n"), 0o600)
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeConfig(link, "Host b\n"); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Lstat(link); fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("symlink replaced")
+	}
+	if b, _ := os.ReadFile(real); string(b) != "Host b\n" {
+		t.Fatalf("target: %s", b)
+	}
+}

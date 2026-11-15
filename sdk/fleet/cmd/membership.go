@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keystore"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 	"github.com/spf13/cobra"
 )
@@ -22,15 +24,20 @@ const sshConfigMode = 0o600
 // up: fleet's first run creates the config empty seconds before the scan
 // fills it, and the resulting 0-byte config.bak-* read like data loss.
 func writeConfig(path, content string) error {
-	if old, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(old)) != "" {
-		bak := fmt.Sprintf("%s.bak-%s", path, time.Now().UTC().Format("20060102T150405Z"))
-		if err := os.WriteFile(bak, old, sshConfigMode); err != nil {
+	if r, err := filepath.EvalSymlinks(path); err == nil {
+		path = r // write through a symlink so the link survives
+	}
+	old, err := os.ReadFile(path)
+	switch {
+	case err == nil && strings.TrimSpace(string(old)) != "":
+		if _, err := keystore.Backup(path, old, time.Now().UTC()); err != nil {
 			return fmt.Errorf("backing up %s: %w", path, err)
 		}
-	} else if !os.IsNotExist(err) {
+	case err != nil && !os.IsNotExist(err):
 		return err
 	}
-	return os.WriteFile(path, []byte(content), sshConfigMode)
+	mode := os.FileMode(sshConfigMode)
+	return keystore.AtomicWrite(path, []byte(content), mode)
 }
 
 // applyConfig writes, or with dryRun prints what would be written.

@@ -17,6 +17,7 @@ const (
 	KeyConfig       = "fleet.update.config"
 	KeySudoGlobal   = "fleet.update.sudo-timestamp-global"
 	KeyASCIIBorders = "fleet.tui.ascii-borders"
+	KeyVaultEnabled = "fleet.vault.enabled"
 )
 
 // Source is the minimal gff surface featflag needs. gff.GFF implements it in
@@ -51,6 +52,11 @@ type Settings struct {
 	// latter badly. Presentation only; an error or a missing key keeps the
 	// default frames and adds no Note.
 	ASCIIBorders bool
+	// VaultEnabled is FAIL-CLOSED: true only when fleet.vault.enabled
+	// explicitly resolved to true. It gates `fleet vault`, `fleet keys
+	// unlock|rotate` and the roster-aware keys sync/prune. An error, a missing
+	// key or a nil source mean off, with no Note: off is the default.
+	VaultEnabled bool
 	// Note explains any fail-open fallback taken, empty when the two plan
 	// flags resolved cleanly. SudoTimestampGlobal and ASCIIBorders never add
 	// a Note: staying off is their default, not a degradation.
@@ -114,6 +120,10 @@ func Resolve(src Source, home, repoDir string) Settings {
 	}
 	if on, err := src.Bool(KeyASCIIBorders); err == nil && on {
 		settings.ASCIIBorders = true
+	}
+
+	if on, err := src.Bool(KeyVaultEnabled); err == nil && on {
+		settings.VaultEnabled = true
 	}
 
 	locs, err := src.Strings(KeyConfig)
