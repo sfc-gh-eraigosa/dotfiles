@@ -721,3 +721,32 @@ func TestLineSetDiff(t *testing.T) {
 		t.Fatalf("add=%d del=%d", add, del)
 	}
 }
+
+// ---- PR #452 fix round 2 ----
+
+// F5: an unreadable key/<ws> may be the only recovery copy of a private key;
+// push refuses to overwrite it, like the other three items.
+func TestPushRefusesToOverwriteAnUnreadableKeyItem(t *testing.T) {
+	for name, data := range map[string]string{
+		"garbage":        "{not json",
+		"unknown schema": `{"schema":99,"kind":"KeyPair"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			e, _ := pushEnv(t, pushTestPass)
+			if _, err := e.store.Put(context.Background(), "key/ws1", vault.Secret(data), ""); err != nil {
+				t.Fatal(err)
+			}
+			e.store.Calls = nil
+			out, err := runVault(t, "y\n"+pushTestPass+"\n", "push")
+			if err == nil {
+				t.Fatalf("push overwrote an unreadable key item\n%s", out)
+			}
+			if !strings.Contains(err.Error(), "key/ws1") {
+				t.Fatalf("error does not name the item: %v", err)
+			}
+			if slices.Contains(e.store.Calls, "put key/ws1") {
+				t.Fatalf("key/ws1 was written: %v", e.store.Calls)
+			}
+		})
+	}
+}

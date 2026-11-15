@@ -380,8 +380,8 @@ func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk loc
 		cur, derr := vault.Decode[vault.KeyPair](b.Data)
 		switch {
 		case derr != nil:
-			key.Changed = true
-			key.Diff = []string{keyName + ": vault copy unreadable → " + lk.Fingerprint}
+			// It may be the only recovery copy of a private key.
+			return p, fmt.Errorf("the vault %s is unreadable (%v); refusing to overwrite it", keyName, derr)
 		case cur.Fingerprint != lk.Fingerprint:
 			key.Changed = true
 			key.Diff = []string{fmt.Sprintf("%s: fingerprint %s → %s", keyName, cur.Fingerprint, lk.Fingerprint)}
