@@ -144,7 +144,13 @@ if [ "$EDITOR_TERMINAL" = "false" ]; then
         echo -e "\033[1;37m└${line}┘\033[00m"
     } > "$motd_tmp"
     mv -f "$motd_tmp" ~/.motd
-    cat ~/.motd
+    # Print it to people only. `ssh host "bash -lc cmd"` is a NON-interactive
+    # login shell: anything printed here lands in the command's stdout, and
+    # callers that capture it (playground k3s-intake reading the server's IP)
+    # get the banner glued onto their data.
+    case $- in
+        *i*) cat ~/.motd ;;
+    esac
 fi
 
 if [ -f "${HOME}/.custom_profile" ] ; then

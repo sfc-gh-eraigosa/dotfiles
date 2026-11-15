@@ -57,6 +57,26 @@ run_profile() {  # <env_file> <initial_PATH> <var_to_print>
         "${SH_BIN}" -c ". '${PROFILE}' >/dev/null 2>&1; printf '%s' \"\${$3:-}\""
 }
 
+# === ssh banner: interactive shells only ===
+# A non-interactive login shell (`ssh host "bash -lc cmd"`) must print nothing
+# but the command's output; an interactive one still shows the banner.
+# Hermetic: a pgrep stub says ssh-agent is already up (none is spawned), and
+# ZSH_VERSION skips the interactive `exec zsh` hand-off so MARK still prints.
+STUBBIN="${TMPHOME}/stubbin"
+mkdir -p "${STUBBIN}"
+printf '#!/bin/sh\nexit 0\n' > "${STUBBIN}/pgrep"
+chmod +x "${STUBBIN}/pgrep"
+run_banner() {  # <sh flags>
+    env -i HOME="${TMPHOME}" PATH="${STUBBIN}:/usr/bin:/bin" TERM=dumb \
+        DOTFILES_ENV_FILE=/dev/null ZSH_VERSION=test \
+        "${SH_BIN}" "$1" ". '${PROFILE}' 2>/dev/null; echo MARK" 2>/dev/null </dev/null
+}
+assert_eq "$(run_banner -c)" "MARK" "non-interactive .profile prints no banner (stdout is only the command's)"
+case "$(run_banner -ic)" in
+    *"OWNED BY"*MARK*) assert_eq "banner" "banner" "interactive .profile still prints the banner" ;;
+    *) assert_eq "no banner" "banner" "interactive .profile still prints the banner" ;;
+esac
+
 # === /etc/environment is parsed, not sourced ===
 ENVFILE="${TMPHOME}/environment"
 cat > "${ENVFILE}" <<'EOF'
