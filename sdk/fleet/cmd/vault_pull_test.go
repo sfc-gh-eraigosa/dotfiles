@@ -608,3 +608,51 @@ func TestPullDoesNotChmodHome(t *testing.T) {
 		t.Fatalf("$HOME chmodded to %o", fi.Mode().Perm())
 	}
 }
+
+// ---- PR #452 fix round 2 ----
+
+// seedEncryptedCopy stores, under key/<ws>, the given plain private key
+// encrypted with pullPass, the way a default `vault push` captures it.
+func (e *pullEnvT) seedEncryptedCopy(t *testing.T, ws string, k pushKeyT) {
+	t.Helper()
+	enc, err := keystore.Encrypt(k.private, []byte(pullPass), ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.seed(t, "key/"+ws, vault.KeyPair{Private: enc, Passphrase: vault.Secret(pullPass), Public: k.pub, Fingerprint: k.fp})
+}
+
+// F1: a plain local key whose vault copy is the same key, encrypted, is the
+// same key: pull leaves the local file alone instead of refusing.
+func TestPullTreatsAPlainLocalKeyAsTheSameAsItsEncryptedVaultCopy(t *testing.T) {
+	e := pullEnv(t)
+	k := writePushKey(t, e.home, "")
+	e.seedEncryptedCopy(t, "ws1", k)
+	out, err := runVault(t, "", "pull")
+	if err != nil {
+		t.Fatalf("pull refused its own key: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "key: unchanged") {
+		t.Fatalf("want key unchanged:\n%s", out)
+	}
+	if b, _ := os.ReadFile(k.path); string(b) != string(k.private) {
+		t.Fatal("the plain local key was replaced by the encrypted copy")
+	}
+	if len(backups(t, e.ssh(), "id_ed25519")) != 0 {
+		t.Fatal("an unchanged key must not be backed up")
+	}
+}
+
+func TestPullStillRefusesADifferentPlainLocalKey(t *testing.T) {
+	e := pullEnv(t)
+	other := writePushKey(t, t.TempDir(), "")
+	e.seedEncryptedCopy(t, "ws1", other)
+	k := writePushKey(t, e.home, "")
+	out, err := runVault(t, "", "pull")
+	if err == nil || !strings.Contains(err.Error(), "--replace-key") {
+		t.Fatalf("want a refusal naming --replace-key: %v\n%s", err, out)
+	}
+	if b, _ := os.ReadFile(k.path); string(b) != string(k.private) {
+		t.Fatal("local key changed")
+	}
+}

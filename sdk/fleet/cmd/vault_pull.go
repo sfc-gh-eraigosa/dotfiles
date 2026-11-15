@@ -244,8 +244,10 @@ func privateFingerprint(priv, pass []byte) (string, error) {
 }
 
 // localKeyIs reports whether the local private key IS the vault's: identical
-// bytes, or one that decrypts with the vault passphrase to the same key. The
-// .pub file alone is never trusted.
+// bytes, one that decrypts with the vault passphrase to the same key, or a
+// plain (unencrypted) file holding the same key — what a default push leaves
+// behind, since it encrypts only the vault copy. The .pub file alone is never
+// trusted.
 func localKeyIs(path string, kp vault.KeyPair, vfp string) bool {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -255,6 +257,9 @@ func localKeyIs(path string, kp vault.KeyPair, vfp string) bool {
 		return true
 	}
 	fp, err := privateFingerprint(b, kp.Passphrase)
+	if err != nil {
+		fp, err = privateFingerprint(b, nil) // parses only an unencrypted key
+	}
 	return err == nil && fp == vfp
 }
 
