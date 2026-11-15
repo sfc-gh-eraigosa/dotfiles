@@ -274,7 +274,7 @@ func secureDir(out io.Writer, dir string) {
 		}
 	case filepath.Base(dir) == ".ssh":
 		if fi.Mode().Perm() != 0o700 {
-			_ = os.Chmod(dir, 0o700)
+			_ = os.Chmod(dir, 0o700) // #nosec G302 -- ~/.ssh is a directory; 0700 is owner-only
 		}
 	case fi.Mode().Perm()&0o022 != 0:
 		fmt.Fprintf(out, "warning: %s is group/world-writable (mode %04o); not changing it\n", dir, fi.Mode().Perm())

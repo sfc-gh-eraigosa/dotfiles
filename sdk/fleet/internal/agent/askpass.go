@@ -44,7 +44,7 @@ func askpassDir() (string, error) {
 			_ = os.RemoveAll(dir)
 			continue
 		}
-		if err := os.Chmod(dir, 0o700); err != nil {
+		if err := os.Chmod(dir, 0o700); err != nil { // #nosec G302 -- a directory needs owner execute; 0700 is owner-only
 			_ = os.RemoveAll(dir)
 			return "", err
 		}
