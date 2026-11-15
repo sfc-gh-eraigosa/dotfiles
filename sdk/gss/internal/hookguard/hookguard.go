@@ -121,8 +121,11 @@ func Inspect(ctx context.Context, r git.Runner, dir string) (Result, error) {
 	}
 	type entry struct{ scope, val string }
 	var entries []entry
+	// Lines are "<scope>\t<value>"; the value may be empty (an explicit
+	// core.hooksPath = "" still overrides the global one), so only the line end
+	// is trimmed.
 	for _, line := range strings.Split(all, "\n") {
-		if line = strings.TrimSpace(line); line == "" {
+		if line = strings.TrimRight(line, "\r"); line == "" {
 			continue
 		}
 		scope, val, ok := strings.Cut(line, "\t")
@@ -139,13 +142,17 @@ func Inspect(ctx context.Context, r git.Runner, dir string) (Result, error) {
 			}
 		}
 	}
-	if res.Global, err = configGet(ctx, r, dir, "--global", "--get"); err != nil {
-		return res, err
+	// The global value is the last global line (a second global file or an
+	// include may set it twice; git uses the last).
+	for _, e := range entries {
+		if e.scope == "global" {
+			res.Global = e.val
+		}
 	}
 
 	// No global value means the privacy hooks are not installed globally,
 	// so there is nothing for a local value to switch off.
-	if res.Value == "" || res.Global == "" {
+	if len(entries) == 0 || res.Global == "" {
 		return res, nil
 	}
 	base := top
@@ -193,7 +200,7 @@ func configGet(ctx context.Context, r git.Runner, dir string, flags ...string) (
 		}
 		return "", fmt.Errorf("hookguard: read %s in %s: %w: %s", Key, dir, err, strings.TrimSpace(string(out)))
 	}
-	return strings.TrimSpace(string(out)), nil
+	return strings.TrimRight(string(out), "\r\n"), nil
 }
 
 // Check returns nil when the global hooks will run for the repo at dir, and

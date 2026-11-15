@@ -164,3 +164,73 @@ func TestDiscoverFollowsSymlinkedCheckouts(t *testing.T) {
 		t.Fatalf("Discover = %v, want the symlinked checkout", repos)
 	}
 }
+
+// An explicit empty value still replaces the global hooks path.
+func TestEmptyValueIsAnOverride(t *testing.T) {
+	root, _ := env(t, true)
+	repo := newRepo(t, filepath.Join(root, "r"))
+	gitc(t, repo, "config", "--local", Key, "")
+	res, err := Inspect(context.Background(), git.NewSystemRunner(), repo)
+	if err != nil || res.Kind != Foreign || res.Scope != "local" || res.Value != "" {
+		t.Fatalf("want a foreign local empty value, got %+v %v", res, err)
+	}
+}
+
+// Two global values (a second global file or an include) are not an error:
+// git uses the last.
+func TestTwoGlobalValues(t *testing.T) {
+	root, globalHooks := env(t, true)
+	cfg := os.Getenv("GIT_CONFIG_GLOBAL")
+	if err := os.WriteFile(cfg, []byte("[core]\n\thooksPath = /elsewhere\n\thooksPath = "+globalHooks+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	repo := newRepo(t, filepath.Join(root, "r"))
+	res, err := Inspect(context.Background(), git.NewSystemRunner(), repo)
+	if err != nil || res.Kind != OK || res.Global != globalHooks {
+		t.Fatalf("want ok with the last global value, got %+v %v", res, err)
+	}
+	if err := Check(context.Background(), git.NewSystemRunner(), repo); err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+}
+
+// With extensions.worktreeConfig, a scan of the parent dir also finds a
+// linked worktree gss never registered, and one --fix pass clears a
+// redundant value in both the worktree and the local scope.
+func TestScanFindsUnregisteredWorktreeAndFixesBothScopes(t *testing.T) {
+	root, _ := env(t, true)
+	ctx, r := context.Background(), git.NewSystemRunner()
+	parent := filepath.Join(root, "git")
+	main := newRepo(t, filepath.Join(parent, "r"))
+	commit(t, main)
+	wt := filepath.Join(root, "elsewhere", "wt")
+	gitc(t, main, "worktree", "add", "-q", "-b", "w", wt)
+	gitc(t, main, "config", "extensions.worktreeConfig", "true")
+	gitc(t, main, "config", "--local", Key, filepath.Join(main, ".git", "hooks"))
+	gitc(t, wt, "config", "--worktree", Key, filepath.Join(main, ".git", "hooks"))
+
+	repos := Discover(ctx, r, nil, []string{parent})
+	found := false
+	for _, p := range repos {
+		found = found || p == wt
+	}
+	if !found {
+		t.Fatalf("Discover = %v, want it to include %s", repos, wt)
+	}
+	var out strings.Builder
+	s := CheckAll(ctx, r, []string{wt}, true, &out)
+	if s.Fixed != 1 || s.Remaining != 0 {
+		t.Fatalf("one pass: %+v\n%s", s, out.String())
+	}
+}
+
+// Approver lets a directory that is not a repo through to the token gate, as
+// Check does: the push fails there on its own.
+func TestApproverPassesANonRepo(t *testing.T) {
+	root, _ := env(t, true)
+	inner := &fakeVerifier{}
+	a := Approver{Inner: inner, Git: git.NewSystemRunner()}
+	if err := a.Verify(context.Background(), filepath.Join(root, "nope"), false); err != nil || inner.calls != 1 {
+		t.Fatalf("non-repo: err=%v calls=%d", err, inner.calls)
+	}
+}

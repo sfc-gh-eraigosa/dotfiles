@@ -999,7 +999,7 @@ if gff_on install.sdk.gss; then
     fi
   fi
 else gff_skip_msg install.sdk.gss; fi
-if gff_on install.git.hooks && [ -x "${HOME}/opt/bin/gss" ]; then "${HOME}/opt/bin/gss" hooks check --fix || true; fi # after the build, so this run's gss has the verb: unset repo-local core.hooksPath overrides that switch the privacy hooks off
+if gff_on install.git.hooks && [ -x "${HOME}/opt/bin/gss" ]; then "${HOME}/opt/bin/gss" hooks check --fix || echo "install.sh: gss hooks check --fix exited $?: an override remains or the check failed (see above)" >&2; fi # after the build, so this run's gss has the verb: unset repo-local core.hooksPath overrides that switch the privacy hooks off
 
 # build and install tmux-mg
 if gff_on install.sdk.tmux-mgr; then

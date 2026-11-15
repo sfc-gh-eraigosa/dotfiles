@@ -88,7 +88,7 @@ func invocation(name string, args []string) call {
 			c.hooksPathIn(v)
 			continue
 		}
-		if v, ok := strings.CutPrefix(t, "--config-env="); ok {
+		if v, ok := value(&i, t, "--config-env"); ok { // git takes it joined or as two words
 			c.hooksPathIn(v)
 			continue
 		}

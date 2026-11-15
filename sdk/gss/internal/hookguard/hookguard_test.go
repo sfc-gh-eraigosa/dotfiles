@@ -245,6 +245,7 @@ func TestInvocation(t *testing.T) {
 		{"-C", []string{"/r", "-c", "user.name=x", "push"}, "/r", "push", ""},
 		{"-ccore.hookspath=/dev/null", []string{"push"}, ".", "push", "core.hookspath=/dev/null"},
 		{"--config-env=core.hooksPath=HP", []string{"push"}, ".", "push", "core.hooksPath=HP"},
+		{"--config-env", []string{"core.hooksPath=HP", "push"}, ".", "push", "core.hooksPath=HP"},
 		{"-C", []string{"/r", "-C", "sub", "status"}, "/r/sub", "status", ""},
 		{"--no-pager", []string{"-C", "/r", "log"}, "/r", "log", ""},
 		{"-C", []string{"/r", "config", "remote.pushDefault"}, "/r", "config", ""},

@@ -31,10 +31,11 @@ check prints one line per repo with such an override:
              hand by chaining those hooks from <git dir>/hooks/<name>
 
 With no paths it scans the main checkout behind every gss registry worktree
-and the git repos one level under ~/github/*/, ~/GitHub/*/ and ~/git/.
---fix unsets the redundant kind (git config --local --unset) and only warns
-about foreign ones; it never touches global config or hook files. The exit
-code is non-zero while any override remains.
+and the git repos one level under ~/github/*/, ~/GitHub/*/ and ~/git/, plus
+each linked worktree of a repo that turns on extensions.worktreeConfig.
+--fix unsets the redundant kind (git config --local or --worktree
+--unset-all) and only warns about foreign ones; it never touches global
+config or hook files. The exit code is non-zero while any override remains.
 
 gss refuses to push from a repo with an override for the same reason.`,
 	Run: func(cmd *cobra.Command, args []string) {

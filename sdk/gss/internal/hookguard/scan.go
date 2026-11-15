@@ -53,8 +53,20 @@ func Discover(ctx context.Context, r git.Runner, worktrees, parents []string) []
 		if top == "" {
 			return
 		}
-		if out, err := r.Run(ctx, "-C", dir, "config", "--bool", "extensions.worktreeConfig"); err == nil && strings.TrimSpace(string(out)) == "true" {
-			list(top)
+		if out, err := r.Run(ctx, "-C", dir, "config", "--bool", "extensions.worktreeConfig"); err != nil || strings.TrimSpace(string(out)) != "true" {
+			return
+		}
+		// Each worktree can carry its own value: list every one git knows,
+		// registered with gss or not.
+		list(top)
+		if out, err := r.Run(ctx, "-C", dir, "worktree", "list", "--porcelain"); err == nil {
+			for _, line := range strings.Split(string(out), "\n") {
+				if p, ok := strings.CutPrefix(line, "worktree "); ok {
+					if _, err := os.Stat(p); err == nil {
+						list(canonical(p))
+					}
+				}
+			}
 		}
 	}
 	for _, wt := range worktrees {
@@ -115,7 +127,12 @@ func CheckAll(ctx context.Context, r git.Runner, repos []string, fix bool, out i
 			continue
 		}
 		if fix && res.Fixable() {
+			// A fix can uncover a second redundant value in another scope
+			// (worktree, then local); keep going while each one is fixable.
 			after, err := Fix(ctx, r, res)
+			for n := 0; err == nil && after.Fixable() && n < 4; n++ {
+				after, err = Fix(ctx, r, after)
+			}
 			if err != nil {
 				s.Errors++
 				fmt.Fprintf(out, "error      %s: %v\n", repo, err)
