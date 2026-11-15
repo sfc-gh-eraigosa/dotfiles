@@ -243,7 +243,7 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 				// The file is now encrypted: a retry round must neither
 				// re-store the key nor rewrite the file again.
 				lk.Encrypted, lk.Private = true, vault.Secret(vaultCopy)
-				fmt.Fprintf(out, "encrypted %s with the passphrase now stored in the vault; your agent will now need `fleet keys unlock` to load it\n", lk.Path)
+				fmt.Fprintf(out, "encrypted %s with the passphrase now stored in the vault item %s; ssh-add will now ask for it (`fleet vault pull` loads the key into your agent for you)\n", lk.Path, it.Name)
 				keep := ""
 				if verr := verifyLocalEncrypted(lk.Path, []byte(kp.Passphrase), lk.Fingerprint); verr != nil {
 					keep = "could not verify the re-encrypted key (" + verr.Error() + ")"
@@ -253,7 +253,7 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 					removeNewPubBackups(lk.Path, pubBefore, lk.PubFile)
 				}
 				if keep != "" {
-					postErr = fmt.Errorf("%s: %s is kept — plaintext — delete it after `fleet keys unlock` works", keep, backup)
+					postErr = fmt.Errorf("%s: %s is kept — plaintext — first check the encrypted key opens with `ssh-keygen -y -f %s` and the passphrase in the vault item %s, then delete it", keep, backup, lk.Path, it.Name)
 					fmt.Fprintf(out, "WARNING: %v\n", postErr)
 				} else {
 					fmt.Fprintln(out, "removed the plaintext backup and its .pub copy; the vault holds the recovery copy")
@@ -426,7 +426,7 @@ func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk loc
 		ros.Diff = append(ros.Diff, fmt.Sprintf("roster: add %s %s as active", cfg.Workstation, lk.Fingerprint))
 		ros.Changed = true
 	case r.Entries[idx].State == vault.KeyRetired:
-		return p, fmt.Errorf("this key (%s) is retired in the vault roster and will not be re-activated; rotate it with `fleet keys rotate`", lk.Fingerprint)
+		return p, fmt.Errorf("this key (%s) is retired in the vault roster and will not be re-activated; move %s aside, make a new key with `ssh-keygen -t ed25519 -f %s`, and re-run `fleet vault push`", lk.Fingerprint, lk.Path, lk.Path)
 	case r.Entries[idx].State == vault.KeyPending:
 		ros.Diff = append(ros.Diff, fmt.Sprintf("roster: activate %s %s (pending → active)", r.Entries[idx].Workstation, lk.Fingerprint))
 		ros.Changed = true

@@ -194,7 +194,7 @@ func TestPullRefusesToReplaceADifferentKeyWithoutTheFlag(t *testing.T) {
 func TestPullAsRestoresAnotherName(t *testing.T) {
 	e := pullEnv(t)
 	_, fpOther := e.seedKey(t, "other")
-	if out, err := runVault(t, "", "pull"); err != nil || !strings.Contains(out, "fleet keys rotate --new") {
+	if out, err := runVault(t, "", "pull"); err != nil || !strings.Contains(out, "the vault has no key for ws1") {
 		t.Fatalf("default name has no key: %v\n%s", err, out)
 	}
 	if _, err := os.Stat(e.ssh("id_ed25519")); err == nil {
@@ -209,7 +209,7 @@ func TestPullAsRestoresAnotherName(t *testing.T) {
 	}
 }
 
-func TestPullWithNoKeyOffersRotateNew(t *testing.T) {
+func TestPullWithNoKeySaysHowToMakeOne(t *testing.T) {
 	e := pullEnv(t)
 	e.seedKey(t, "elsewhere")
 	e.seed(t, "inventory", vault.Inventory{Config: pullInv})
@@ -217,11 +217,12 @@ func TestPullWithNoKeyOffersRotateNew(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	for _, w := range []string{"fleet keys rotate --new", "then run `fleet keys sync` on a trusted workstation", "elsewhere"} {
+	for _, w := range []string{"ssh-keygen -t ed25519 -f " + e.ssh("id_ed25519"), "fleet vault push", "then run `fleet keys sync` on a trusted workstation", "elsewhere"} {
 		if !strings.Contains(out, w) {
 			t.Fatalf("missing %q:\n%s", w, out)
 		}
 	}
+	assertNoUnlandedVerb(t, out)
 	if len(e.loads) != 0 {
 		t.Fatal("no key, nothing to load")
 	}
@@ -265,7 +266,7 @@ func TestPullOnDarwinOffersUseKeychain(t *testing.T) {
 	e.goos = "linux"
 	_ = os.Remove(e.ssh("config")) // may already be absent
 	out, _ = runVault(t, "y\n", "pull")
-	if cfg, _ := os.ReadFile(e.ssh("config")); strings.Contains(string(cfg), "UseKeychain") || strings.Contains(out, "UseKeychain") {
+	if cfg, _ := os.ReadFile(e.ssh("config")); strings.Contains(string(cfg), "UseKeychain") || strings.Contains(out, "macOS: add") { // not "UseKeychain": the temp path carries the test name
 		t.Fatalf("linux got a keychain block:\n%s\n%s", cfg, out)
 	}
 }
@@ -297,9 +298,10 @@ func TestPullLoadsTheKeyIntoTheAgent(t *testing.T) {
 	// no agent: skipped with a note, not an error
 	agentLoaded = func(context.Context, string) (bool, error) { return false, agent.ErrNoAgent }
 	out, err = runVault(t, "", "pull")
-	if err != nil || len(e.loads) != 0 || !strings.Contains(out, "no agent") {
+	if err != nil || len(e.loads) != 0 || !strings.Contains(out, "no agent") || !strings.Contains(out, "key/ws1") {
 		t.Fatalf("no agent: %v %v\n%s", err, e.loads, out)
 	}
+	assertNoUnlandedVerb(t, out)
 }
 
 // ---- PR #457 review fixes ----

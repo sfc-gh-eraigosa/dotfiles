@@ -159,7 +159,7 @@ func vaultPull(cmd *cobra.Command, as string, replaceKey bool) error {
 			ex = strings.Join(others, ", ")
 		}
 		fmt.Fprintf(out, "key: the vault has no key for %s (existing: %s)\n", ws, ex)
-		fmt.Fprintln(out, "  to make one: fleet keys rotate --new")
+		fmt.Fprintf(out, "  to make one: `ssh-keygen -t ed25519 -f %s`, then `fleet vault push` to store it\n", cfg.Key)
 		fmt.Fprintln(out, "  then run `fleet keys sync` on a trusted workstation to authorize it")
 	} else if restore {
 		secureDir(out, filepath.Dir(cfg.Key))
@@ -505,7 +505,7 @@ func pullLoadAgent(ctx context.Context, out io.Writer, keyPath, item, fp string,
 	loaded, err := agentLoaded(ctx, fp)
 	switch {
 	case errors.Is(err, agent.ErrNoAgent):
-		fmt.Fprintln(out, "agent: no agent running; start one and run fleet keys unlock")
+		fmt.Fprintf(out, "agent: no agent running; start one, then re-run `fleet vault pull` or `ssh-add %s` (its passphrase is in the vault item %s)\n", keyPath, item)
 		return
 	case err != nil:
 		fmt.Fprintf(out, "agent: check failed: %v\n", err)

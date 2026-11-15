@@ -396,9 +396,10 @@ func TestPushEncryptLocalRewritesTheKeyAfterTheVaultWrite(t *testing.T) {
 		t.Fatalf("local key does not open with the vault passphrase: %v", err)
 	}
 	// the plaintext backup is verified-then-removed (TestPushEncryptLocalDropsThePlaintextBackupOnceVerified)
-	if !strings.Contains(out, "fleet keys unlock") {
-		t.Fatalf("does not say the agent now needs unlock:\n%s", out)
+	if !strings.Contains(out, "ssh-add will now ask for it") || !strings.Contains(out, "key/ws1") {
+		t.Fatalf("does not say where the passphrase now is:\n%s", out)
 	}
+	assertNoUnlandedVerb(t, out)
 	assertNoSecret(t, out, append(keyLines(k.private), string(kp.Passphrase))...)
 }
 
@@ -487,9 +488,10 @@ func TestPushRefusesARetiredKey(t *testing.T) {
 	putBlob(t, e.store, "roster", r)
 	before := puts(e.store.Calls)
 	out, err := runVault(t, "y\n"+pushTestPass+"\n", "push")
-	if err == nil || !strings.Contains(err.Error(), "retired") {
+	if err == nil || !strings.Contains(err.Error(), "retired") || !strings.Contains(err.Error(), "fleet vault push") {
 		t.Fatalf("err=%v\n%s", err, out)
 	}
+	assertNoUnlandedVerb(t, err.Error())
 	if puts(e.store.Calls) != before {
 		t.Fatal("wrote after finding a retired key")
 	}
@@ -585,9 +587,11 @@ func TestPushEncryptLocalKeepsTheBackupWhenVerificationFails(t *testing.T) {
 	if b, _ := os.ReadFile(m[0]); string(b) != string(k.private) {
 		t.Fatal("backup is not the plain key")
 	}
-	if !strings.Contains(out+fmt.Sprint(err), m[0]) || !strings.Contains(out+fmt.Sprint(err), "plaintext — delete it after `fleet keys unlock` works") {
+	all := out + fmt.Sprint(err)
+	if !strings.Contains(all, m[0]) || !strings.Contains(all, "plaintext") || !strings.Contains(all, "ssh-keygen -y -f "+k.path) {
 		t.Fatalf("backup path/warning missing: %v\n%s", err, out)
 	}
+	assertNoUnlandedVerb(t, all)
 }
 
 func TestPushEncryptLocalConflictRetryRewritesOnce(t *testing.T) {
@@ -748,5 +752,16 @@ func TestPushRefusesToOverwriteAnUnreadableKeyItem(t *testing.T) {
 				t.Fatalf("key/ws1 was written: %v", e.store.Calls)
 			}
 		})
+	}
+}
+
+// F4: the verbs `fleet keys unlock|rotate` land in PR 3; until then no
+// message may send the operator to them.
+func assertNoUnlandedVerb(t *testing.T, out string) {
+	t.Helper()
+	for _, v := range []string{"fleet keys unlock", "fleet keys rotate", "fleet vault init"} {
+		if strings.Contains(out, v) {
+			t.Fatalf("names %q, which does not exist yet:\n%s", v, out)
+		}
 	}
 }
