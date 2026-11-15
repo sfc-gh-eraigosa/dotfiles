@@ -59,6 +59,8 @@ type PREditOpts struct {
 	Base     string
 	Body     string
 	BodyFile string
+	// AddLabels are added (never removed) with `gh pr edit --add-label`.
+	AddLabels []string
 }
 
 // PRFilter is the input to Client.PRList. The zero value lists OPEN PRs

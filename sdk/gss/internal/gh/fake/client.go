@@ -123,8 +123,8 @@ func (c *Client) PREdit(_ context.Context, num int, opts gh.PREditOpts) error {
 	if num <= 0 {
 		return fmt.Errorf("fake gh: PREdit requires num > 0, got %d", num)
 	}
-	if opts.Base == "" && opts.Body == "" && opts.BodyFile == "" {
-		return fmt.Errorf("fake gh: PREdit requires at least one of Base, Body, BodyFile")
+	if opts.Base == "" && opts.Body == "" && opts.BodyFile == "" && len(opts.AddLabels) == 0 {
+		return fmt.Errorf("fake gh: PREdit requires at least one of Base, Body, BodyFile, AddLabels")
 	}
 	pr, ok := c.prs[num]
 	if !ok {

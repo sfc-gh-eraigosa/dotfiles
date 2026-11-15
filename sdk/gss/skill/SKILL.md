@@ -34,20 +34,60 @@ This skill provides a structured and safe workflow for managing Git repositories
 
 - **PR Hygiene — the description and labels must always match the PR's full current scope**: A PR's description and labels are part of its state, not a one-time creation step. Keep them accurate for *everything the PR now contains*, every time you change what's on it:
 - **On create** (`gss pr`): `gss pr` does **not** infer a body or labels — pass them explicitly via `gss pr --title "<subject>" --body "<markdown body>"` and use `gh pr edit --add-label "<labels>"` immediately after.
-- **`gss pr` never commits** — the Add → Commit steps above are yours, and they come **before** the approval token (the token is HEAD-bound; committing after invalidates it). On the default branch with no commits ahead of `origin/<default>`, `gss pr` fails fast with "nothing to PR" instead of pushing an empty feature branch; commit the pending work, regenerate the token, and re-run.
+- **`gss pr` never commits** — the Add → Commit steps above are yours, and they come **before** the approval token (the token is HEAD-bound; committing after invalidates it). On the default branch with no commits ahead of `origin/<default>`, `gss pr` fails fast with "nothing to PR" instead of pushing an empty feature branch; commit the pending work, ask the user for a fresh token (the handshake), and re-run.
 - **On every later push to a branch that already has an open PR** (`gss push`, or a re-run `gss pr`): `gss push` only updates the branch. After such a push you MUST refresh the description and labels to cover the newly added commits, via `gh pr edit <number> --title "<subject>" --body "<body>" --add-label "<labels>"`. **Never push scope-changing commits to a PR and leave its description or labels behind.**
 - **Label Selection**: Use standard prefixes (`feat`, `fix`, `docs`, `ci`, `test`, `style`, `refactor`, `chore`) and area-specific labels (e.g., `gsl`, `wispr`, `remote-claude`). If a PR addresses an issue, ensure it carries the same categorization labels as the issue.
 - The body should always include — **What** (summary of functional changes), **Why** (rationale), **Impact** (effect on system/UX), **Testing** (how verified). NEVER use generic or empty descriptions.
 - **Note**: `gss pr` has no `--draft` flag — classic PRs are created ready-for-review. (Draft PRs exist only in the `gss feature` stacked-worker workflow, whose PR bodies and labels are owned by `gss feature checkpoint` — do **not** hand-edit those with `gh pr edit`.)
 
+### The approval handshake
+
+The approval token is the **human's** signature on one exact commit. gss
+checks it against `HEAD` and consumes it. **An assistant never writes
+`~/.config/gss/approval.token`** — not with `>`, `tee`, `cp`, a script, or a
+leftover token from earlier. Self-minting approves your own work: the
+`safety_guard.sh` hook blocks chaining it, and Claude Code's auto-mode
+classifier blocks it outright as undermining oversight.
+
+**Which verbs need it**
+
+| Ungated — run them yourself | Token-gated — handshake first |
+| :-- | :-- |
+| `gss feature start`, `worker add`, `checkpoint` (draft PR), `rebase`, `list`, `audit`, `conflicts`; `gss status`, `scan`, `diff` | `gss feature pr --ready [--merge]`, `merged`, `restack`; classic `gss push`, `gss pr`, `gss sync` |
+
+**The flow — one handshake per publish**
+
+1. **Finish the commits first.** The token is bound to `HEAD`, so any commit
+   after it invalidates it. Commit everything (after the user confirms), then
+   run the ungated `gss feature checkpoint` so the draft PR exists.
+2. **Hand off — stop and ask.** End your turn with the exact command for the
+   user to run, pointing at the repo the gated verb will act on:
+
+   ```
+   ! git -C <worktree path> rev-parse HEAD > ~/.config/gss/approval.token
+   ```
+
+   (`!` runs it inside the Claude Code session; in other harnesses the user
+   runs it in their shell.) Put this in an interactive prompt or a
+   `> ⚠️ **NEEDS YOUR INPUT:**` block, and name what it approves
+   ("approves `<sha>`: mark PR #N ready and queue it for merge").
+3. **Run one gated verb** once the user says it's done. To ship a worker PR
+   that is **one** command — `gss feature pr --ready --merge` promotes it and
+   adds the `ready-for-merge` label the Mergify queue lands, so there is no
+   `gh pr edit` step and no second token.
+4. **On a token error** (exit 22, `missing or unreadable approval token`,
+   `ErrPRReadyNeedsToken`, a HEAD mismatch): do not retry and do not mint.
+   Say which commit needs approving and ask again.
+
+**Don't**: write the token "since the user already said yes"; chain the
+token and the verb; follow a gated verb with `gh pr edit --add-label` /
+`gh pr merge` / `git push` to finish the job — if gss has no verb for a
+step, stop and ask.
+
 ### 3. Execution (Action Phase)
 - ONLY proceed if the user explicitly selected a confirmation option in the previous turn.
-- **Handshake Generation**: Before calling `gss push`, you MUST generate an approval token — as **two separate commands**. The `safety_guard.sh` hook intentionally blocks chaining the token generation and the push in one command, so the user sees an explicit approve→publish gate.
-  * Step 1 (one command): `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
-  * Step 2 (a separate command): `gss push`
-- This consumes the token and satisfies the binary's technical safeguard.
-- **First push of a brand-new branch (no double prompt)**: `gss push` detects a branch with no `origin/<branch>` counterpart and creates it with `--set-upstream` instead of failing on the rebase step — it prints `New branch — … --set-upstream`. So the single token → `gss push` recipe works for a new branch too; issue it ONCE. Do **not** expect (or work around) the old `sync: rebase ... couldn't find remote ref <branch>` failure, which used to burn the token and force a **second** confirmation prompt. Fallback for an OLD binary that still errors that way: run one plain `git push -u origin HEAD` (a plain push is not token-gated), then create the PR — do not regenerate the token and retry `gss push`.
-- **Auto-Recovery**: If `gss push` fails with a "missing or unreadable approval token" error (exit 22), it means you skipped the user confirmation turn. You MUST immediately stop and explicitly ask the user for permission before retrying.
+- **Approval handshake** — see [The approval handshake](#the-approval-handshake) above: the **user** mints the token, you run the gated verb once. Never write `~/.config/gss/approval.token` yourself.
+- **First push of a brand-new branch (no double prompt)**: `gss push` detects a branch with no `origin/<branch>` counterpart and creates it with `--set-upstream` instead of failing on the rebase step — it prints `New branch — … --set-upstream`. So one handshake → `gss push` works for a new branch too. Do **not** expect (or work around) the old `sync: rebase ... couldn't find remote ref <branch>` failure.
 - **Auth/scope failures (403, "refusing to allow … without `workflow` scope", email-privacy rejections)**: check whether a stale `GITHUB_TOKEN` is exported in the environment (`env | grep -c GITHUB_TOKEN`) — gh prefers that env var over its keyring, so a shell-exported token keeps OLD scopes alive even after `gh auth refresh`. Fix: `unset GITHUB_TOKEN`, then retry. Tools that need a raw token fetch the current one on demand with `gh auth token`; never export it at shell startup.
 - **Refresh the PR description (mandatory after pushing to an existing PR)**: If the push added commits to a branch that *already* has an open PR (rather than creating a new one), the PR body is now stale — `gss push` never updates it. Immediately reconcile it with `gh pr edit <number> --title "<subject>" --body "<body>"` so the description covers the PR's new full scope (re-derive What/Why/Impact/Testing from *all* commits now on the branch, e.g. `git log <base>..HEAD`). This is part of the push, not an optional follow-up. (Skip only for `gss feature` worktrees — `gss feature checkpoint` owns those bodies.)
 
@@ -91,7 +131,8 @@ checkpoint`.** It is ungated because it only opens a *draft* PR. `gss push` /
 human gate — self-minting defeats the control rather than satisfying it, so
 that lane is closed when you are working alone.
 
-Promotion back to human: `gss feature pr --ready` is token-gated.
+Promotion back to human: `gss feature pr --ready --merge` is token-gated —
+follow [The approval handshake](#the-approval-handshake).
 
 ## Feature worker workflow (stacked PRs)
 
@@ -155,8 +196,8 @@ Two hook-layer behaviours that `--help` will not tell you about:
   anywhere and is unambiguous.
 - **The approval token is checked against the repo gss will act on** —
   `--repo/-r` first, else the leading `cd` target, else the session cwd — so
-  for a cross-repo publish mint the token from *that* repo
-  (`git -C "$HOME/…/other-repo" rev-parse HEAD > ~/.config/gss/approval.token`).
+  for a cross-repo publish the command you hand the user must read *that*
+  repo's HEAD (`! git -C "$HOME/…/other-repo" rev-parse HEAD > ~/.config/gss/approval.token`).
   A stale deny names the repo it compared against and how it chose it.
 - **`--help` is refused for gated verbs outside a worktree** (the rules match
   the verb, not the flags). Read `sdk/gss/cmd/feature_<verb>.go` for the flag
@@ -176,11 +217,12 @@ Teardown: `gss feature done <worker-ref>` removes a worker;
 
 ### The approval token also gates the publish-class feature verbs
 
-The mandatory-confirmation + two-call token recipe above ALSO applies to
-`gss feature pr --ready`, `gss feature merged`, and `gss feature restack`
-(they mutate remote state). Generate the token as a SEPARATE call immediately
-before the command, then run it; `safety_guard.sh` enforces this and refuses
-classic `--force-autonomous` inside a worker worktree.
+`gss feature pr --ready [--merge]`, `gss feature merged`, and `gss feature
+restack` mutate remote state, so they follow [The approval
+handshake](#the-approval-handshake): the user mints the token, you run the
+verb once. `safety_guard.sh` refuses classic `--force-autonomous` inside a
+worker worktree. To queue a worker PR, use `gss feature pr --ready --merge`
+— never `gh pr edit --add-label ready-for-merge`.
 
 ### Description hygiene
 
