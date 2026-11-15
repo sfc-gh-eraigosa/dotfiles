@@ -5,10 +5,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/agent"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keystore"
@@ -654,5 +656,41 @@ func TestPullStillRefusesADifferentPlainLocalKey(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(k.path); string(b) != string(k.private) {
 		t.Fatal("local key changed")
+	}
+}
+
+// F7: ssh-add runs under a deadline; a hung load is a warning, not a failed
+// pull (the key and config are already written).
+func TestPullBoundsTheAgentLoadWithADeadline(t *testing.T) {
+	e := pullEnv(t)
+	e.seedKey(t, "ws1")
+	orig := agentLoadTimeout
+	t.Cleanup(func() { agentLoadTimeout = orig })
+	agentLoadTimeout = 20 * time.Millisecond
+	agentLoaded = func(context.Context, string) (bool, error) { return false, nil }
+	hadDeadline := false
+	agentLoad = func(ctx context.Context, _ string, _ vault.Secret) error {
+		_, hadDeadline = ctx.Deadline()
+		select { // a hung ssh-add
+		case <-ctx.Done():
+			return errors.New("agent: ssh-add: signal: killed") // what exec reports
+		case <-time.After(2 * time.Second): // no deadline: fail, don't hang
+			return errors.New("ssh-add never stopped")
+		}
+	}
+	out, err := runVault(t, "", "pull")
+	if err != nil {
+		t.Fatalf("a hung agent load must not fail the pull: %v\n%s", err, out)
+	}
+	if !hadDeadline {
+		t.Fatal("agentLoad got a ctx without a deadline")
+	}
+	for _, w := range []string{"timed out", "ssh-add " + e.ssh("id_ed25519")} {
+		if !strings.Contains(out, w) {
+			t.Fatalf("missing %q:\n%s", w, out)
+		}
+	}
+	if _, err := os.Stat(e.ssh("id_ed25519")); err != nil {
+		t.Fatal("the key must be restored before the agent load")
 	}
 }

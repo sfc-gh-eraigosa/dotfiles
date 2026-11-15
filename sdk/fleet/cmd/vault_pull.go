@@ -39,6 +39,10 @@ var (
 	}
 )
 
+// agentLoadTimeout bounds the ssh-add run in `vault pull` (agent.Load blocks
+// while it runs). A var only so a test can shorten it.
+var agentLoadTimeout = 60 * time.Second
+
 // keychainBlock is the macOS-only Host * stanza offered after a pull.
 const keychainBlock = "Host *\n    IgnoreUnknown UseKeychain\n    UseKeychain yes\n    AddKeysToAgent yes\n"
 
@@ -204,7 +208,7 @@ func vaultPull(cmd *cobra.Command, as string, replaceKey bool) error {
 		fmt.Fprintf(out, "workstation: this machine is now %q in %s\n", as, vaultConfigPath())
 	}
 	if haveKey {
-		pullLoadAgent(ctx, out, cfg.Key, vfp, kp.Passphrase)
+		pullLoadAgent(ctx, out, cfg.Key, "key/"+ws, vfp, kp.Passphrase)
 	}
 	return nil
 }
@@ -494,9 +498,10 @@ func (p khPlanT) apply(out io.Writer) error {
 	return nil
 }
 
-// pullLoadAgent loads the key unless the agent already has it. Failures are
-// reported, not fatal: the key is restored either way.
-func pullLoadAgent(ctx context.Context, out io.Writer, keyPath, fp string, pass vault.Secret) {
+// pullLoadAgent loads the key unless the agent already has it, under
+// agentLoadTimeout. Failures (a timeout included) are reported, not fatal: the
+// key is restored either way. item names the vault item holding the passphrase.
+func pullLoadAgent(ctx context.Context, out io.Writer, keyPath, item, fp string, pass vault.Secret) {
 	loaded, err := agentLoaded(ctx, fp)
 	switch {
 	case errors.Is(err, agent.ErrNoAgent):
@@ -509,7 +514,16 @@ func pullLoadAgent(ctx context.Context, out io.Writer, keyPath, fp string, pass 
 		fmt.Fprintln(out, "agent: key already loaded")
 		return
 	}
-	if err := agentLoad(ctx, keyPath, pass); err != nil {
+	lctx, cancel := context.WithTimeout(ctx, agentLoadTimeout)
+	err = agentLoad(lctx, keyPath, pass)
+	// A killed ssh-add reports "signal: killed", not the ctx error: ask lctx.
+	timedOut := err != nil && errors.Is(lctx.Err(), context.DeadlineExceeded)
+	cancel()
+	if timedOut {
+		fmt.Fprintf(out, "agent: ssh-add timed out after %s; the key and config are already written — load it with `ssh-add %s` (its passphrase is in the vault item %s)\n", agentLoadTimeout, keyPath, item)
+		return
+	}
+	if err != nil {
 		fmt.Fprintf(out, "agent: loading the key failed: %v\n", err)
 		return
 	}
