@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/git"
 )
@@ -16,25 +17,45 @@ import (
 // under each of parents (a directory counts when it holds a .git entry, so
 // git never walks up from a plain directory into some enclosing repo).
 // Repos are de-duplicated by git common dir, since core.hooksPath in a repo's
-// own config is shared by all of its worktrees.
+// own config is shared by all of its worktrees. A linked worktree is listed
+// too when the repo turns on extensions.worktreeConfig, since it can then
+// carry a value of its own.
 func Discover(ctx context.Context, r git.Runner, worktrees, parents []string) []string {
 	seen := map[string]bool{}
 	var repos []string
+	list := func(p string) {
+		if !seen[p] {
+			seen[p] = true
+			repos = append(repos, p)
+		}
+	}
 	add := func(dir string) {
 		common, err := revParsePath(ctx, r, dir, "--git-common-dir")
 		if err != nil {
 			return
 		}
 		common = canonical(common)
-		if seen[common] {
+		top, _ := revParsePath(ctx, r, dir, "--show-toplevel")
+		if top != "" {
+			top = canonical(top)
+		}
+		if !seen["common:"+common] {
+			seen["common:"+common] = true
+			main := common
+			switch {
+			case filepath.Base(common) == ".git":
+				main = filepath.Dir(common)
+			case top != "":
+				main = top // a submodule: its git dir is <super>/.git/modules/<name>
+			}
+			list(main)
+		}
+		if top == "" {
 			return
 		}
-		seen[common] = true
-		main := common
-		if filepath.Base(common) == ".git" {
-			main = filepath.Dir(common)
+		if out, err := r.Run(ctx, "-C", dir, "config", "--bool", "extensions.worktreeConfig"); err == nil && strings.TrimSpace(string(out)) == "true" {
+			list(top)
 		}
-		repos = append(repos, main)
 	}
 	for _, wt := range worktrees {
 		if wt == "" {
@@ -51,10 +72,10 @@ func Discover(ctx context.Context, r git.Runner, worktrees, parents []string) []
 			continue
 		}
 		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
 			dir := filepath.Join(p, e.Name())
+			if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+				continue // os.Stat follows a symlinked checkout
+			}
 			if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
 				continue
 			}

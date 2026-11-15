@@ -29,6 +29,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -65,6 +66,9 @@ func (k Kind) String() string {
 // for it with errors.Is.
 var ErrOverride = stderrors.New("a repo-local core.hooksPath switches off the global privacy git hooks")
 
+// errNotRepo marks an Inspect of a directory git does not see as a repo.
+var errNotRepo = stderrors.New("not a git repository")
+
 // Result is what Inspect found for one repo.
 type Result struct {
 	// Repo is the directory Inspect was given.
@@ -80,12 +84,18 @@ type Result struct {
 	// HooksDir is the repo's own hooks dir (<git common dir>/hooks).
 	HooksDir string
 	Kind     Kind
+	// Values are every core.hooksPath set in Scope, in the order git reads
+	// them; Value is the last, the one git uses.
+	Values []string
+	// ownOnly: every one of Values points at the repo's own hooks dir.
+	ownOnly bool
 }
 
 // Fixable reports whether Fix can remove the override: the Redundant kind,
-// set in this repo's own config.
+// set in this repo's own config, with no other value in that scope that
+// unsetting would also remove.
 func (r Result) Fixable() bool {
-	return r.Kind == Redundant && (r.Scope == "local" || r.Scope == "worktree")
+	return r.Kind == Redundant && r.ownOnly && (r.Scope == "local" || r.Scope == "worktree")
 }
 
 // Inspect reads the effective and global core.hooksPath for the repo at dir
@@ -96,22 +106,41 @@ func Inspect(ctx context.Context, r git.Runner, dir string) (Result, error) {
 
 	common, err := revParsePath(ctx, r, dir, "--git-common-dir")
 	if err != nil {
-		return res, fmt.Errorf("hookguard: %s is not a git repository: %w", dir, err)
+		return res, fmt.Errorf("hookguard: %s: %w: %v", dir, errNotRepo, err)
 	}
 	gitDir, _ := revParsePath(ctx, r, dir, "--git-dir")
 	top, _ := revParsePath(ctx, r, dir, "--show-toplevel")
 	res.HooksDir = filepath.Join(common, "hooks")
 
-	if out, err := r.Run(ctx, "-C", dir, "config", "--show-scope", "--get", Key); err == nil {
-		line := strings.TrimSpace(string(out))
-		if scope, val, ok := strings.Cut(line, "\t"); ok {
-			res.Scope, res.Value = scope, val
-		} else {
-			res.Value = line
+	// Every value in every scope, last one wins. git exits 1 when the key is
+	// unset; any other failure means the config could not be read, and the
+	// caller must not take that for "no override".
+	all, err := configGet(ctx, r, dir, "--show-scope", "--get-all")
+	if err != nil {
+		return res, err
+	}
+	type entry struct{ scope, val string }
+	var entries []entry
+	for _, line := range strings.Split(all, "\n") {
+		if line = strings.TrimSpace(line); line == "" {
+			continue
+		}
+		scope, val, ok := strings.Cut(line, "\t")
+		if !ok {
+			scope, val = "", line
+		}
+		entries = append(entries, entry{scope, val})
+	}
+	if n := len(entries); n > 0 {
+		res.Scope, res.Value = entries[n-1].scope, entries[n-1].val
+		for _, e := range entries {
+			if e.scope == res.Scope {
+				res.Values = append(res.Values, e.val)
+			}
 		}
 	}
-	if out, err := r.Run(ctx, "-C", dir, "config", "--global", "--get", Key); err == nil {
-		res.Global = strings.TrimSpace(string(out))
+	if res.Global, err = configGet(ctx, r, dir, "--global", "--get"); err != nil {
+		return res, err
 	}
 
 	// No global value means the privacy hooks are not installed globally,
@@ -131,14 +160,40 @@ func Inspect(ctx context.Context, r git.Runner, dir string) (Result, error) {
 	if gitDir != "" {
 		own = append(own, filepath.Join(gitDir, "hooks"))
 	}
+	isOwn := func(p string) bool {
+		for _, h := range own {
+			if p == canonical(h) {
+				return true
+			}
+		}
+		return false
+	}
 	res.Kind = Foreign
-	for _, h := range own {
-		if eff == canonical(h) {
-			res.Kind = Redundant
-			break
+	if isOwn(eff) {
+		res.Kind = Redundant
+	}
+	res.ownOnly = true
+	for _, v := range res.Values {
+		if !isOwn(resolve(v, base)) {
+			res.ownOnly = false
 		}
 	}
 	return res, nil
+}
+
+// configGet reads Key with the given git config flags. Unset (git exits 1)
+// is "" and no error; any other failure is an error.
+func configGet(ctx context.Context, r git.Runner, dir string, flags ...string) (string, error) {
+	args := append(append([]string{"-C", dir, "config"}, flags...), Key)
+	out, err := r.Run(ctx, args[0], args[1:]...)
+	if err != nil {
+		var ee *exec.ExitError
+		if stderrors.As(err, &ee) && ee.ExitCode() == 1 {
+			return "", nil
+		}
+		return "", fmt.Errorf("hookguard: read %s in %s: %w: %s", Key, dir, err, strings.TrimSpace(string(out)))
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // Check returns nil when the global hooks will run for the repo at dir, and
@@ -147,10 +202,15 @@ func Inspect(ctx context.Context, r git.Runner, dir string) (Result, error) {
 // and gives the fix.
 func Check(ctx context.Context, r git.Runner, dir string) error {
 	res, err := Inspect(ctx, r, dir)
-	if err != nil {
+	if stderrors.Is(err, errNotRepo) {
 		// Not a repo (or git missing): the push itself will fail with git's
 		// own, clearer error. The guard has nothing to judge.
 		return nil
+	}
+	if err != nil {
+		// The config could not be read, so whether the privacy hooks run is
+		// unknown: refuse rather than guess.
+		return fmt.Errorf("gss refuses to push %s: cannot tell whether the privacy hooks run: %w", dir, err)
 	}
 	if res.Kind == OK {
 		return nil
@@ -172,6 +232,8 @@ func Explain(res Result) string {
 // Advice is the one-line fix for a non-OK result.
 func Advice(res Result) string {
 	switch {
+	case res.Kind == Redundant && !res.ownOnly && len(res.Values) > 1:
+		return fmt.Sprintf("%s config holds %d core.hooksPath values (%s) and git uses the last; gss will not remove the others with it. Edit them by hand: git -C %s config --%s --edit", scopeName(res.Scope), len(res.Values), strings.Join(res.Values, ", "), res.Repo, unsetScope(res.Scope))
 	case res.Fixable():
 		return fmt.Sprintf("gss hooks check --fix %s  (the value points at the repo's own hooks dir, which the global hooks already run after their check, so removing it loses nothing)", res.Repo)
 	case res.Kind == Redundant:
@@ -189,7 +251,7 @@ func Fix(ctx context.Context, r git.Runner, res Result) (Result, error) {
 	if !res.Fixable() {
 		return res, nil
 	}
-	if out, err := r.Run(ctx, "-C", res.Repo, "config", "--"+res.Scope, "--unset", Key); err != nil {
+	if out, err := r.Run(ctx, "-C", res.Repo, "config", "--"+res.Scope, "--unset-all", Key); err != nil {
 		return res, fmt.Errorf("hookguard: unset %s in %s: %w: %s", Key, res.Repo, err, strings.TrimSpace(string(out)))
 	}
 	return Inspect(ctx, r, res.Repo)

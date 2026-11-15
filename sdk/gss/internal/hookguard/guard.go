@@ -2,6 +2,7 @@ package hookguard
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -19,39 +20,99 @@ type Runner struct {
 
 // Run implements git.Runner.
 func (g Runner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	if dir, sub := invocation(name, args); sub == "push" {
-		if err := Check(ctx, g.Inner, dir); err != nil {
+	if inv := invocation(name, args); inv.sub == "push" {
+		if inv.override != "" {
+			return nil, fmt.Errorf("%w\ngss refuses to push %s: the command line sets %s, so the privacy guard (pre-push) would not run", ErrOverride, inv.dir, inv.override)
+		}
+		if err := Check(ctx, g.Inner, inv.dir); err != nil {
 			return nil, err
 		}
 	}
 	return g.Inner.Run(ctx, name, args...)
 }
 
+// call is what invocation reads from a Runner call: the git subcommand, the
+// directory it runs in, and a core.hooksPath set on the command line.
+type call struct {
+	dir, sub, override string
+}
+
 // invocation finds the git subcommand and the directory it runs in from the
 // Runner's (name, args) pair. gss composes calls as ("-C", dir, "push", …),
 // so the first element may be a global option rather than the subcommand.
-func invocation(name string, args []string) (dir, sub string) {
+// --work-tree (or, without it, --git-dir) names the repo; a -c or
+// --config-env that sets core.hooksPath is reported as an override.
+func invocation(name string, args []string) call {
 	toks := append([]string{name}, args...)
-	dir = "."
+	c := call{dir: "."}
+	var gitDir, workTree string
+	at := func(p string) string {
+		if filepath.IsAbs(p) {
+			return p
+		}
+		return filepath.Join(c.dir, p)
+	}
+	value := func(i *int, t, flag string) (string, bool) {
+		if t == flag && *i+1 < len(toks) {
+			*i++
+			return toks[*i], true
+		}
+		if v, ok := strings.CutPrefix(t, flag+"="); ok {
+			return v, true
+		}
+		return "", false
+	}
 	for i := 0; i < len(toks); i++ {
 		t := toks[i]
-		switch {
-		case t == "-C" && i+1 < len(toks):
-			i++
-			if filepath.IsAbs(toks[i]) {
-				dir = toks[i]
-			} else {
-				dir = filepath.Join(dir, toks[i])
-			}
-		case (t == "-c" || t == "--git-dir" || t == "--work-tree" || t == "--namespace") && i+1 < len(toks):
-			i++
-		case strings.HasPrefix(t, "-"):
-			// --no-pager, --git-dir=…, -c… joined forms: no separate value.
-		default:
-			return dir, t
+		if v, ok := value(&i, t, "-C"); ok {
+			c.dir = at(v)
+			continue
 		}
+		if v, ok := value(&i, t, "--git-dir"); ok {
+			gitDir = at(v)
+			continue
+		}
+		if v, ok := value(&i, t, "--work-tree"); ok {
+			workTree = at(v)
+			continue
+		}
+		if _, ok := value(&i, t, "--namespace"); ok {
+			continue
+		}
+		if t == "-c" && i+1 < len(toks) {
+			i++
+			c.hooksPathIn(toks[i])
+			continue
+		}
+		if v, ok := strings.CutPrefix(t, "-c"); ok && !strings.HasPrefix(t, "--") {
+			c.hooksPathIn(v)
+			continue
+		}
+		if v, ok := strings.CutPrefix(t, "--config-env="); ok {
+			c.hooksPathIn(v)
+			continue
+		}
+		if strings.HasPrefix(t, "-") {
+			continue // --no-pager, --bare, --exec-path=… and the like: no separate value
+		}
+		c.sub = t
+		break
 	}
-	return dir, ""
+	switch {
+	case workTree != "":
+		c.dir = workTree
+	case gitDir != "":
+		c.dir = gitDir
+	}
+	return c
+}
+
+// hooksPathIn records kv when it sets core.hooksPath (git config keys are
+// case-insensitive in their section and name).
+func (c *call) hooksPathIn(kv string) {
+	if k, _, _ := strings.Cut(kv, "="); strings.EqualFold(k, Key) {
+		c.override = kv
+	}
 }
 
 // verifier is the approval-token gate (satisfied by *approval.Verifier).

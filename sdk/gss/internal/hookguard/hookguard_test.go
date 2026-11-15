@@ -235,21 +235,28 @@ func TestApproverChecksBeforeToken(t *testing.T) {
 
 func TestInvocation(t *testing.T) {
 	cases := []struct {
-		name     string
-		args     []string
-		dir, sub string
+		name               string
+		args               []string
+		dir, sub, override string
 	}{
-		{"-C", []string{"/r", "push", "origin", "b"}, "/r", "push"},
-		{"push", nil, ".", "push"},
-		{"-C", []string{"/r", "-c", "core.hooksPath=/x", "push"}, "/r", "push"},
-		{"-C", []string{"/r", "-C", "sub", "status"}, "/r/sub", "status"},
-		{"--no-pager", []string{"-C", "/r", "log"}, "/r", "log"},
-		{"-C", []string{"/r", "config", "remote.pushDefault"}, "/r", "config"},
+		{"-C", []string{"/r", "push", "origin", "b"}, "/r", "push", ""},
+		{"push", nil, ".", "push", ""},
+		{"-C", []string{"/r", "-c", "core.hooksPath=/x", "push"}, "/r", "push", "core.hooksPath=/x"},
+		{"-C", []string{"/r", "-c", "user.name=x", "push"}, "/r", "push", ""},
+		{"-ccore.hookspath=/dev/null", []string{"push"}, ".", "push", "core.hookspath=/dev/null"},
+		{"--config-env=core.hooksPath=HP", []string{"push"}, ".", "push", "core.hooksPath=HP"},
+		{"-C", []string{"/r", "-C", "sub", "status"}, "/r/sub", "status", ""},
+		{"--no-pager", []string{"-C", "/r", "log"}, "/r", "log", ""},
+		{"-C", []string{"/r", "config", "remote.pushDefault"}, "/r", "config", ""},
+		{"--git-dir", []string{"/r/.git", "--work-tree", "/r", "push"}, "/r", "push", ""},
+		{"--git-dir=/r/.git", []string{"push"}, "/r/.git", "push", ""},
+		{"-C", []string{"/a", "--work-tree=w", "push"}, "/a/w", "push", ""},
+		{"--exec-path=/x", []string{"push"}, ".", "push", ""},
 	}
 	for _, tc := range cases {
-		dir, sub := invocation(tc.name, tc.args)
-		if dir != tc.dir || sub != tc.sub {
-			t.Errorf("invocation(%q, %v) = (%q, %q), want (%q, %q)", tc.name, tc.args, dir, sub, tc.dir, tc.sub)
+		c := invocation(tc.name, tc.args)
+		if c.dir != tc.dir || c.sub != tc.sub || c.override != tc.override {
+			t.Errorf("invocation(%q, %v) = %+v, want dir %q sub %q override %q", tc.name, tc.args, c, tc.dir, tc.sub, tc.override)
 		}
 	}
 }
