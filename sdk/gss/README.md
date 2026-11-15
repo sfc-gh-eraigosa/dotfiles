@@ -13,6 +13,7 @@ The primary goal of gss is to provide a "safety net" for developers and autonomo
 - gss backup: Explicitly creates a safety backup branch.
 - gss scan [dir]: Scans a directory for any Git repositories that have uncommitted changes.
 - gss pr: Creates a feature branch, pushes it, and opens a Pull Request via the gh CLI.
+- gss hooks check [--fix] [paths...]: Lists repos whose own core.hooksPath switches off the global privacy git hooks; --fix removes the redundant kind (a value pointing at the repo's own .git/hooks). Every push gss makes refuses such a repo.
 
 ## Usage
 

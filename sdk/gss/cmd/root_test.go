@@ -12,7 +12,7 @@ import (
 // exhaustive `gss --help` assertion.
 func TestRootCommandTree(t *testing.T) {
 	for _, name := range []string{
-		"feature", "push", "pr", "sync", "status", "scan", "backup", "config", "version", "diff",
+		"feature", "push", "pr", "sync", "status", "scan", "backup", "config", "version", "diff", "hooks",
 	} {
 		if !hasSubcommand(rootCmd, name) {
 			t.Errorf("gss %s is not registered on root", name)
