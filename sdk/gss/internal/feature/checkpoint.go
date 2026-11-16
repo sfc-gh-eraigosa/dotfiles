@@ -247,6 +247,10 @@ func renderPRBody(f registry.Feature, here identity.WorkerRef, existing, notes s
 	view := stack.StackView{Feature: f.Name}
 	desc := ""
 	siblings := siblingLabels(f)
+	users := make(map[string]bool, len(f.Workers))
+	for _, w := range f.Workers {
+		users[w.User] = true
+	}
 	for _, w := range f.Workers {
 		cand := identity.WorkerRef{Feature: f.Name, User: w.User, Purpose: w.Purpose, Suffix: w.Suffix}
 		isHere := cand.SameWorker(here)
@@ -256,7 +260,7 @@ func renderPRBody(f registry.Feature, here identity.WorkerRef, existing, notes s
 		view.Entries = append(view.Entries, stack.Entry{
 			PRNumber: prNumber(w.PRURL),
 			Ref:      cand.Leaf(),
-			Base:     displayBase(w.BaseBranch, siblings),
+			Base:     displayBase(w.BaseBranch, siblings, users),
 			Here:     isHere,
 		})
 	}
@@ -287,15 +291,26 @@ func siblingLabels(f registry.Feature) map[string]string {
 // displayBase is the base branch as the stack block shows it: a sibling
 // worker's branch becomes its label, another feature's worker branch
 // (feature/<f>/<user>/<leaf>, the leaf possibly holding more slashes) drops
-// the user segment, anything else (main, a release branch) is shown as is.
-func displayBase(base string, siblings map[string]string) string {
+// the user segment. Any other base (main, a release branch) is shown with
+// every path segment that equals a worker's user removed.
+func displayBase(base string, siblings map[string]string, users map[string]bool) string {
 	if label, ok := siblings[base]; ok {
 		return label
 	}
 	if parts := strings.Split(base, "/"); len(parts) >= 4 && parts[0] == "feature" {
 		return parts[1] + "/" + strings.Join(parts[3:], "/")
 	}
-	return base
+	parts := strings.Split(base, "/")
+	kept := parts[:0]
+	for _, p := range parts {
+		if !users[p] {
+			kept = append(kept, p)
+		}
+	}
+	if len(kept) == 0 {
+		return "(a user branch)"
+	}
+	return strings.Join(kept, "/")
 }
 
 // currentPRBody fetches a PR's body so renderPRBody can preserve it. A failed
