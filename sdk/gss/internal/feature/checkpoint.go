@@ -286,14 +286,14 @@ func siblingLabels(f registry.Feature) map[string]string {
 
 // displayBase is the base branch as the stack block shows it: a sibling
 // worker's branch becomes its label, another feature's worker branch
-// (feature/<f>/<user>/<leaf>) drops the user segment, anything else (main, a
-// release branch) is shown as is.
+// (feature/<f>/<user>/<leaf>, the leaf possibly holding more slashes) drops
+// the user segment, anything else (main, a release branch) is shown as is.
 func displayBase(base string, siblings map[string]string) string {
 	if label, ok := siblings[base]; ok {
 		return label
 	}
-	if parts := strings.Split(base, "/"); len(parts) == 4 && parts[0] == "feature" {
-		return parts[1] + "/" + parts[3]
+	if parts := strings.Split(base, "/"); len(parts) >= 4 && parts[0] == "feature" {
+		return parts[1] + "/" + strings.Join(parts[3:], "/")
 	}
 	return base
 }
