@@ -13,6 +13,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/feature"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/git"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/hookguard"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/identity"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/mode"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/registry"
@@ -32,7 +33,12 @@ func newFeatureService() (*feature.Service, error) {
 		return nil, err
 	}
 	repoPath := getRepoPath()
-	runner := git.NewSystemRunner()
+	// Every push a feature verb makes (checkpoint, rebase, restack, merged …)
+	// goes through the hooks-override guard (hookguard): a worker whose repo
+	// sets its own core.hooksPath, switching off the global privacy hooks, is
+	// refused before anything leaves the machine.
+	sys := git.NewSystemRunner()
+	runner := hookguard.Runner{Inner: sys}
 	// Scope gh to --repo: it derives the target repository from its working
 	// directory, so an unscoped client resolves and mutates whatever repo
 	// the shell is sitting in. That is how `gss -r <dotfiles> feature start`
@@ -54,7 +60,7 @@ func newFeatureService() (*feature.Service, error) {
 		Backend:      wtgit.NewBackend(repoPath, runner),
 		Git:          runner,
 		GH:           ghc,
-		Approval:     approval.NewVerifier(tokenPath, runner),
+		Approval:     hookguard.Approver{Inner: approval.NewVerifier(tokenPath, sys), Git: sys},
 		Clock:        config.SystemClock{},
 		WorktreeRoot: expandHome(cfg.Paths.WorktreeRoot),
 		NWO:          nwo.String(),
