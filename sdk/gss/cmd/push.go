@@ -16,6 +16,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/errors"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/git"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/hookguard"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/mode"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/registry"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/sync"
@@ -41,13 +42,16 @@ var pushCmd = &cobra.Command{
 		}
 
 		// Wire and run the classic push orchestrator (PR-22).
-		runner := git.NewSystemRunner()
+		// Every push goes through the hooks-override guard (hookguard): a repo
+		// whose own core.hooksPath replaces the global privacy hooks is refused.
+		sys := git.NewSystemRunner()
+		runner := hookguard.Runner{Inner: sys}
 		home, _ := os.UserHomeDir()
 		tokenPath := filepath.Join(home, ".config", "gss", "approval.token")
 		pusher := &classic.Pusher{
 			Git:      runner,
 			GH:       gh.NewSystemClientInDir(getRepoPath()),
-			Approval: approval.NewVerifier(tokenPath, runner),
+			Approval: hookguard.Approver{Inner: approval.NewVerifier(tokenPath, sys), Git: sys},
 			Backup:   backup.NewService(runner, config.SystemClock{}),
 			Sync:     sync.NewService(runner),
 			Out:      os.Stdout,
