@@ -19,127 +19,129 @@ All `go test` commands run from `sdk/fleet/` in the worker worktree.
 
 ## Preflight (once)
 
-- [ ] `go version` matches `go.mod`
-- [ ] `ssh -V` ≥ 8.4 (record the version in TRACKING)
-- [ ] `command -v op lpass` → both present
-- [ ] `gss feature list --feature fleet-vault-keys --json` → worker `design`, PR #452
-- [ ] Worker rebased on current `origin/main` (`git -c commit.gpgsign=false rebase origin/main`)
-- [ ] `./scripts/test.sh` baseline captured to `evidence/baseline.txt` (pre-existing failures noted)
+- [x] `go version` matches `go.mod`
+- [x] `ssh -V` ≥ 8.4 (record the version in TRACKING)
+- [x] `command -v op lpass` → both present
+- [x] `gss feature list --feature fleet-vault-keys --json` → worker `design`, PR #452
+- [x] Worker rebased on current `origin/main` (`git -c commit.gpgsign=false rebase origin/main`)
+- [x] `./scripts/test.sh` baseline captured to `evidence/baseline.txt` (pre-existing failures noted)
 
 ---
 
 ### Task 0 — vendor CLI spike  (plan Task 0; operator ruling 2026-11-13: Go live test, not a bash transcript; lpass only, op deferred)
 
-- [ ] SETUP: operator runs `lpass login --trust <email>`; `lpass status` → logged in
-- [ ] RED: `internal/vault/lpass/live_test.go` (`//go:build live`, skips unless `FLEET_VAULT_LIVE=lpass`): `TestLiveRoundTrip` — Put create → Get (version) → Put update with that version → Get (version changed) → Put with the stale version → `ErrConflict` → List contains it → delete in `t.Cleanup`
-- [ ] RUN (after Task 4): `FLEET_VAULT_LIVE=lpass go test -tags live -run TestLiveRoundTrip -v ./internal/vault/lpass/` → PASS; output (no payload values) teed to `evidence/spike/lpass.txt`
-- [ ] LEDGER: mark each lpass argv line confirmed/corrected in TRACKING §1; op lines stay unconfirmed
-- [ ] COMMIT: folded into Task 4's commit
+- [x] SETUP: operator runs `lpass login --trust <email>`; `lpass status` → logged in
+- [x] RED: `internal/vault/lpass/live_test.go` (`//go:build live`, skips unless `FLEET_VAULT_LIVE=lpass`): `TestLiveRoundTrip` — Put create → Get (version) → Put update with that version → Get (version changed) → Put with the stale version → `ErrConflict` → List contains it → delete in `t.Cleanup`
+- [x] RUN (after Task 4): `FLEET_VAULT_LIVE=lpass go test -tags live -run TestLiveRoundTrip -v ./internal/vault/lpass/` → PASS; output (no payload values) teed to `evidence/spike/lpass.txt`
+- [x] LEDGER: mark each lpass argv line confirmed/corrected in TRACKING §1; op lines stay unconfirmed
+- [x] COMMIT: folded into Task 4's commit
 
 **Done when:** the live round-trip passes against the real lpass and every lpass argv line is marked.
 
 ### Task 1 — vault contract  (plan Task 1)
 
-- [ ] RED: `TestSecretNeverPrints`, `TestFakeCompareAndSet`, `TestOpenRejectsAnUnknownProvider`
-- [ ] RUN-RED: `go test ./internal/vault/...` → expect **FAIL** (undefined)
-- [ ] GREEN: `internal/vault/{store,fake}.go`, `internal/vault/providers/providers.go`
-- [ ] RUN-GREEN: `go test ./internal/vault/...` → expect **PASS**
-- [ ] VERIFY: `go test -cover ./internal/vault/...` ≥ 60 %; ALLOWLIST new paths
-- [ ] COMMIT: `fleet/vault: Store contract, redacting Secret, Fake (fleet-vault-keys T1)`
-- [ ] LEDGER
+- [x] RED: `TestSecretNeverPrints`, `TestFakeCompareAndSet`, `TestOpenRejectsAnUnknownProvider`
+- [x] RUN-RED: `go test ./internal/vault/...` → expect **FAIL** (undefined)
+- [x] GREEN: `internal/vault/{store,fake}.go`, `internal/vault/providers/providers.go`
+- [x] RUN-GREEN: `go test ./internal/vault/...` → expect **PASS**
+- [x] VERIFY: `go test -cover ./internal/vault/...` ≥ 60 %; ALLOWLIST new paths
+- [x] COMMIT: `fleet/vault: Store contract, redacting Secret, Fake (fleet-vault-keys T1)`
+- [x] LEDGER
 
 ### Task 2 — payload codec + roster  (plan Task 2)
 
-- [ ] RED: `TestPayloadRoundTripsEveryKind`, `TestDecodeRejectsAWrongKindOrSchema`, `TestRosterLifecycle`, `TestManagedNeverIncludesRetired`
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `internal/vault/{payload,roster}.go`
-- [ ] RUN-GREEN → **PASS**; coverage ≥ 60 %
-- [ ] COMMIT: `fleet/vault: fleet-vault/v1 payloads and roster lifecycle (fleet-vault-keys T2)`
-- [ ] LEDGER + CHECKPOINT (confirm first)
+- [x] RED: `TestPayloadRoundTripsEveryKind`, `TestDecodeRejectsAWrongKindOrSchema`, `TestRosterLifecycle`, `TestManagedNeverIncludesRetired`
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `internal/vault/{payload,roster}.go`
+- [x] RUN-GREEN → **PASS**; coverage ≥ 60 %
+- [x] COMMIT: `fleet/vault: fleet-vault/v1 payloads and roster lifecycle (fleet-vault-keys T2)`
+- [x] LEDGER + CHECKPOINT (confirm first)
 
 ### Task 3 — 1Password adapter  (plan Task 3)
 
-- [ ] SETUP: `testdata/*.json` from the spike transcript, values replaced
-- [ ] RED: `TestReadyMapsTheVendorErrors`, `TestGetReturnsPayloadAndVersion`, `TestGetMissingIsErrNotFound`, `TestPutCreateSendsThePayloadOnStdinOnly`, `TestPutUpdateChecksTheVersionFirst`, `TestPutSignedOutWritesNothing`
-- [ ] RUN-RED: `go test ./internal/vault/op/...` → **FAIL**
-- [ ] GREEN: `internal/vault/op/op.go`; register in `providers.Open`
-- [ ] RUN-GREEN → **PASS**; coverage ≥ 60 %
-- [ ] COMMIT: `fleet/vault/op: 1Password adapter over the op CLI (fleet-vault-keys T3)`
-- [ ] LEDGER
+- [x] SETUP: `testdata/*.json` from the spike transcript, values replaced
+- [x] RED: `TestReadyMapsTheVendorErrors`, `TestGetReturnsPayloadAndVersion`, `TestGetMissingIsErrNotFound`, `TestPutCreateSendsThePayloadOnStdinOnly`, `TestPutUpdateChecksTheVersionFirst`, `TestPutSignedOutWritesNothing`
+- [x] RUN-RED: `go test ./internal/vault/op/...` → **FAIL**
+- [x] GREEN: `internal/vault/op/op.go`; register in `providers.Open`
+- [x] RUN-GREEN → **PASS**; coverage ≥ 60 %
+- [x] COMMIT: `fleet/vault/op: 1Password adapter over the op CLI (fleet-vault-keys T3)`
+- [x] LEDGER
 
 ### Task 4 — LastPass adapter  (plan Task 4)
 
-- [ ] RED: Task 3's set for lpass + `TestPutDetectsAChangedNoteBeforeEditing`
-- [ ] RUN-RED: `go test ./internal/vault/lpass/...` → **FAIL**
-- [ ] GREEN: `internal/vault/lpass/lpass.go`; register in `providers.Open`
-- [ ] RUN-GREEN → **PASS**; coverage ≥ 60 %
-- [ ] COMMIT: `fleet/vault/lpass: LastPass adapter over the lpass CLI (fleet-vault-keys T4)`
-- [ ] LEDGER + CHECKPOINT (confirm first)
+- [x] RED: Task 3's set for lpass + `TestPutDetectsAChangedNoteBeforeEditing`
+- [x] RUN-RED: `go test ./internal/vault/lpass/...` → **FAIL**
+- [x] GREEN: `internal/vault/lpass/lpass.go`; register in `providers.Open`
+- [x] RUN-GREEN → **PASS**; coverage ≥ 60 %
+- [x] COMMIT: `fleet/vault/lpass: LastPass adapter over the lpass CLI (fleet-vault-keys T4)`
+- [x] LEDGER + CHECKPOINT (confirm first)
 
 ### Task 5 — vault.yaml + fleet.vault.enabled  (plan Task 5)
 
-- [ ] SETUP: capture today's `keys sync` argv golden from `main` before editing
-- [ ] RED: `TestResolveVaultEnabledIsFailClosed`, `TestVaultConfigRefusesAGroupWritableFile`, `TestVaultConfigMissingIsUnconfigured`, `TestVaultConfigDefaults`, `TestNoVaultMeansTodaysKeysSyncArgv`
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `featflag.go`, `cmd/vault_config.go`, `/.github/gff/features.yaml`
-- [ ] RUN-GREEN → **PASS**
-- [ ] VERIFY: `gff` validates `features.yaml` (repo's gff check)
-- [ ] COMMIT: `fleet: vault.yaml + fleet.vault.enabled gate, fail-closed (fleet-vault-keys T5)`
-- [ ] LEDGER
+- [x] SETUP: capture today's `keys sync` argv golden from `main` before editing
+- [x] RED: `TestResolveVaultEnabledIsFailClosed`, `TestVaultConfigRefusesAGroupWritableFile`, `TestVaultConfigMissingIsUnconfigured`, `TestVaultConfigDefaults`, `TestNoVaultMeansTodaysKeysSyncArgv`
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `featflag.go`, `cmd/vault_config.go`, `/.github/gff/features.yaml`
+- [x] RUN-GREEN → **PASS**
+- [x] VERIFY: `gff` validates `features.yaml` (repo's gff check)
+- [x] COMMIT: `fleet: vault.yaml + fleet.vault.enabled gate, fail-closed (fleet-vault-keys T5)`
+- [x] LEDGER
 
 ### Task 6 — keystore  (plan Task 6)
 
-- [ ] RED: `TestGenerateIsEncryptedWithThePassphrase`, `TestWriteBacksUpAnExistingKeyAndSetsModes`, `TestEncryptedFalseForAPlainKey`, `TestFingerprintMatchesSshKeygen`
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `internal/keystore/keystore.go` (+ `golang.org/x/crypto` if needed; `go mod tidy`)
-- [ ] RUN-GREEN → **PASS**; coverage ≥ 60 %
-- [ ] COMMIT: `fleet/keystore: passphrase-protected ed25519 generate/write/inspect (fleet-vault-keys T6)`
-- [ ] LEDGER
+- [x] RED: `TestGenerateIsEncryptedWithThePassphrase`, `TestWriteBacksUpAnExistingKeyAndSetsModes`, `TestEncryptedFalseForAPlainKey`, `TestFingerprintMatchesSshKeygen`
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `internal/keystore/keystore.go` (+ `golang.org/x/crypto` if needed; `go mod tidy`)
+- [x] RUN-GREEN → **PASS**; coverage ≥ 60 %
+- [x] COMMIT: `fleet/keystore: passphrase-protected ed25519 generate/write/inspect (fleet-vault-keys T6)`
+- [x] LEDGER
 
 ### Task 7 — agent + askpass  (plan Task 7)
 
-- [ ] RED: `TestLoadedParsesSshAddList`, `TestLoadPassesThePassphraseOnlyOverTheSocket`, `TestAskpassServesOnceThenCloses`, `TestAskpassSocketDirIs0700`
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `internal/agent/{agent,askpass}.go`; `main.go` askpass client mode
-- [ ] RUN-GREEN → **PASS**; coverage ≥ 60 %
-- [ ] COMMIT: `fleet/agent: load a key via fleet-as-askpass, never argv/env (fleet-vault-keys T7)`
-- [ ] LEDGER + CHECKPOINT (confirm first)
+- [x] RED: `TestLoadedParsesSshAddList`, `TestLoadPassesThePassphraseOnlyOverTheSocket`, `TestAskpassServesOnceThenCloses`, `TestAskpassSocketDirIs0700`
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `internal/agent/{agent,askpass}.go`; `main.go` askpass client mode
+- [x] RUN-GREEN → **PASS**; coverage ≥ 60 %
+- [x] COMMIT: `fleet/agent: load a key via fleet-as-askpass, never argv/env (fleet-vault-keys T7)`
+- [x] LEDGER + CHECKPOINT (confirm first)
 
 ### Task 8 — locked-key pre-flight  (plan Task 8)
 
-- [ ] RED: `TestPreflightStopsBeforeAnyDial`, `TestPreflightIgnoresAPlainKey`, `TestPreflightIgnoresALoadedKey`, `TestPreflightWithNoAgentNamesHowToStartOne`, `TestPreflightNeverMarksAHostAuthFailed`
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `cmd/preflight.go`; wire into `status`, `update`, `keys sync`, `tui`
-- [ ] RUN-GREEN → **PASS**; full `go test ./cmd/...` still green
-- [ ] COMMIT: `fleet: stop before dialling when the key is locked (fleet-vault-keys T8)`
+- [x] RED: `TestPreflightStopsBeforeAnyDial`, `TestPreflightIgnoresAPlainKey`, `TestPreflightIgnoresALoadedKey`, `TestPreflightWithNoAgentNamesHowToStartOne`, `TestPreflightNeverMarksAHostAuthFailed`
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `cmd/preflight.go`; wire into `status`, `update`, `keys sync`, `tui`
+- [x] RUN-GREEN → **PASS**; full `go test ./cmd/...` still green
+- [x] COMMIT: `fleet: stop before dialling when the key is locked (fleet-vault-keys T8)`
+- [ ] FIX: stub `keyLocked` in the existing status/update/keys-sync/tui tests so none reach the real ~/.ssh or agent (test-isolation rule); full `go test ./...` = only the 3 known failures
+- [ ] REVIEW: task review of 81b7b23 + the fix (spec + quality); fix loop until clean
 - [ ] LEDGER
 
 ### Task 9 — vault setup|status  (plan Task 9)
 
-- [ ] RED: `TestSetupWritesConfigAfterSignIn`, `TestVaultVerbsRefuseWhenDisabled`, `TestStatusReportsEachFacet`, `TestStatusNamesTheExistingKeysWhenThisNameHasNone`
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `cmd/vault.go`
-- [ ] RUN-GREEN → **PASS**
-- [ ] COMMIT: `fleet: vault setup + status (fleet-vault-keys T9)`
-- [ ] LEDGER
+- [x] RED: `TestSetupWritesConfigAfterSignIn`, `TestVaultVerbsRefuseWhenDisabled`, `TestStatusReportsEachFacet`, `TestStatusNamesTheExistingKeysWhenThisNameHasNone`
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `cmd/vault.go`
+- [x] RUN-GREEN → **PASS**
+- [x] COMMIT: `fleet: vault setup + status (fleet-vault-keys T9)`
+- [x] LEDGER
 
 ### Task 10 — vault push  (plan Task 10)
 
-- [ ] RED: `TestPushNothingChangedWritesNothing`, `TestPushShowsADiffAndWritesAfterConfirm`, `TestPushConflictRereadsAndAsksAgain`, `TestPushStopsCleanlyWhenSignedOutMidway`, `TestPushNeverIncludesAnExecDirective`
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `cmd/vault_push.go`
-- [ ] RUN-GREEN → **PASS**
-- [ ] COMMIT: `fleet: vault push, one-way and diff-first (fleet-vault-keys T10)`
-- [ ] LEDGER
+- [x] RED: `TestPushNothingChangedWritesNothing`, `TestPushShowsADiffAndWritesAfterConfirm`, `TestPushConflictRereadsAndAsksAgain`, `TestPushStopsCleanlyWhenSignedOutMidway`, `TestPushNeverIncludesAnExecDirective`
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `cmd/vault_push.go`
+- [x] RUN-GREEN → **PASS**
+- [x] COMMIT: `fleet: vault push, one-way and diff-first (fleet-vault-keys T10)`
+- [x] LEDGER
 
 ### Task 11 — vault pull  (plan Task 11)
 
-- [ ] RED: `TestPullRestoresKeyConfigAndKnownHosts`, `TestPullRefusesToReplaceADifferentKeyWithoutTheFlag`, `TestPullAsRestoresAnotherName`, `TestPullWithNoKeyOffersRotateNew`, `TestPullOnDarwinOffersUseKeychain`, `TestPullLoadsTheKeyIntoTheAgent`
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `cmd/vault_pull.go`
-- [ ] RUN-GREEN → **PASS**
-- [ ] COMMIT: `fleet: vault pull — restore key, inventory, host keys (fleet-vault-keys T11)`
-- [ ] LEDGER + CHECKPOINT (confirm first)
+- [x] RED: `TestPullRestoresKeyConfigAndKnownHosts`, `TestPullRefusesToReplaceADifferentKeyWithoutTheFlag`, `TestPullAsRestoresAnotherName`, `TestPullWithNoKeyOffersRotateNew`, `TestPullOnDarwinOffersUseKeychain`, `TestPullLoadsTheKeyIntoTheAgent`
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `cmd/vault_pull.go`
+- [x] RUN-GREEN → **PASS**
+- [x] COMMIT: `fleet: vault pull — restore key, inventory, host keys (fleet-vault-keys T11)`
+- [x] LEDGER + CHECKPOINT (confirm first)
 
 ### Task 12 — keys unlock  (plan Task 12)
 
