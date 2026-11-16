@@ -17,6 +17,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/git"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/identity"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/provenance"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/registry"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/tmpl"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/worktree"
@@ -38,6 +39,10 @@ type Service struct {
 	RepoPath     string               // main checkout (for local branch deletion); "" → derived from the worktree
 	BranchPrefix string               // default "feature"
 	UserSources  identity.UserSources // Override is set per WorkerAdd call
+	// Provenance, when set, is written into each PR body checkpoint renders
+	// (a managed section). nil writes none, which keeps tests independent of
+	// the environment they run in.
+	Provenance *provenance.Info
 }
 
 func (s *Service) branchPrefix() string {

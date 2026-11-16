@@ -66,6 +66,7 @@ func newFeatureService() (*feature.Service, error) {
 		NWO:          nwo.String(),
 		RepoPath:     repoPath,
 		BranchPrefix: "feature",
+		Provenance:   provenanceHere(),
 		UserSources: identity.UserSources{
 			// GHLogin is intentionally nil: the gh.Client has no CurrentUser
 			// verb in v1, so user resolution falls through git email → $USER.
