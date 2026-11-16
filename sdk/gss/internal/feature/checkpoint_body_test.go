@@ -105,7 +105,9 @@ func TestCheckpoint_StackRowsOmitUser(t *testing.T) {
 			registry.Worker{User: "erai", Purpose: "deep", Branch: "feature/auth/erai/deep",
 				Worktree: "/wt/deep", BaseBranch: "feature/other/erai/x/y"},
 			registry.Worker{User: "erai", Purpose: "rel", Branch: "feature/auth/erai/rel",
-				Worktree: "/wt/rel", BaseBranch: "release/erai/v1"})
+				Worktree: "/wt/rel", BaseBranch: "release/erai/v1"},
+			registry.Worker{User: "erai", Purpose: "solo", Branch: "feature/auth/erai/solo",
+				Worktree: "/wt/solo", BaseBranch: "erai"})
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -118,7 +120,7 @@ func TestCheckpoint_StackRowsOmitUser(t *testing.T) {
 	if strings.Contains(stackPart, "erai") {
 		t.Errorf("stack block names the user:\n%s", stackPart)
 	}
-	for _, want := range []string{"**#7 — api (base: `main`)**", "(no PR yet) — ui (base: `#7`)", "(no PR yet) — docs (base: `other/x`)", "(no PR yet) — deep (base: `other/x/y`)", "(no PR yet) — rel (base: `release/v1`)"} {
+	for _, want := range []string{"**#7 — api (base: `main`)**", "(no PR yet) — ui (base: `#7`)", "(no PR yet) — docs (base: `other/x`)", "(no PR yet) — deep (base: `other/x/y`)", "(no PR yet) — rel (base: `release/v1`)", "(no PR yet) — solo (base: `(a user branch)`)"} {
 		if !strings.Contains(stackPart, want) {
 			t.Errorf("stack block missing %q:\n%s", want, stackPart)
 		}
