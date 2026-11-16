@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/registry"
 )
 
 // TestHooksCheckWired pins `gss hooks check` and its --fix flag.
@@ -89,5 +91,65 @@ func TestScanParents(t *testing.T) {
 	want := []string{filepath.Join(home, "github", "a"), filepath.Join(home, "GitHub", "b"), filepath.Join(home, "git")}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("scanParents = %v, want %v", got, want)
+	}
+}
+
+// With no paths, `gss hooks check` scans the main checkout behind every
+// registry worktree and the repos under ~/github/<org>, ~/GitHub/<org> and
+// ~/git, and exits non-zero while an override remains; with none left it
+// does not exit.
+func TestHooksCheckDiscoversAndExits(t *testing.T) {
+	root := hermeticGit(t)
+	gitIn := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	scanned := filepath.Join(root, "git", "scanned")
+	main := filepath.Join(root, "elsewhere", "main")
+	wt := filepath.Join(root, "elsewhere", "wt")
+	gitIn("init", "-q", scanned)
+	gitIn("init", "-q", "-b", "main", main)
+	gitIn("-C", main, "-c", "user.name=t", "-c", "user.email=t", "commit", "-q", "--allow-empty", "-m", "c")
+	gitIn("-C", main, "worktree", "add", "-q", "-b", "w", wt)
+	gitIn("-C", scanned, "config", "--local", "core.hooksPath", ".husky/_")
+	gitIn("-C", main, "config", "--local", "core.hooksPath", ".git/hooks")
+
+	regDir := filepath.Join(root, "gss-registry")
+	if err := os.MkdirAll(regDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.NewStore(filepath.Join(regDir, "registry.json")).Update(func(r *registry.Registry) error {
+		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{Name: "f", Workers: []registry.Worker{{Worktree: wt}}}}}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GSS_REGISTRY_DIR", regDir)
+	if got := registryWorktrees(); len(got) != 1 || got[0] != wt {
+		t.Fatalf("registryWorktrees = %v, want [%s]", got, wt)
+	}
+
+	code := -1
+	hooksExit = func(c int) { code = c }
+	t.Cleanup(func() { hooksExit = os.Exit })
+	var out bytes.Buffer
+	hooksCheckCmd.SetOut(&out)
+	t.Cleanup(func() { hooksCheckCmd.SetOut(nil) })
+
+	hooksCheckCmd.Run(hooksCheckCmd, nil)
+	if code != 1 || !strings.Contains(out.String(), "foreign    "+scanned+":") || !strings.Contains(out.String(), "redundant  "+main+":") {
+		t.Fatalf("want both overrides found and exit 1, got exit %d:\n%s", code, out.String())
+	}
+
+	gitIn("-C", scanned, "config", "--local", "--unset", "core.hooksPath")
+	hooksFix = true
+	t.Cleanup(func() { hooksFix = false })
+	code = -1
+	out.Reset()
+	hooksCheckCmd.Run(hooksCheckCmd, nil)
+	if code != -1 || !strings.Contains(out.String(), "fixed      "+main+":") || !strings.Contains(out.String(), "0 overrides remain") {
+		t.Fatalf("want the redundant one fixed and no exit, got exit %d:\n%s", code, out.String())
 	}
 }

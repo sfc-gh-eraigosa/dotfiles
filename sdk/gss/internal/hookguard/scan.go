@@ -45,8 +45,16 @@ func Discover(ctx context.Context, r git.Runner, worktrees, parents []string) []
 			switch {
 			case filepath.Base(common) == ".git":
 				main = filepath.Dir(common)
-			case top != "":
-				main = top // a submodule: its git dir is <super>/.git/modules/<name>
+			default:
+				// A submodule's git dir is <super>/.git/modules/<name>, whose
+				// core.worktree names the main checkout even when dir is one of
+				// its linked worktrees. Without one (--separate-git-dir), dir's
+				// own toplevel is the best answer; a bare repo keeps its git dir.
+				if t, err := revParsePath(ctx, r, common, "--show-toplevel"); err == nil {
+					main = canonical(t)
+				} else if top != "" {
+					main = top
+				}
 			}
 			list(main)
 		}
@@ -106,13 +114,23 @@ type Summary struct {
 	Errors    int // paths that could not be inspected or fixed
 }
 
-// CheckAll inspects every repo, prints one line per repo that has an
-// override (and per fix or error), and with fix unsets the Redundant kind.
-// Foreign values are reported with the way to chain them, never changed.
+// CheckAll inspects every repo, prints one line per override (and per value
+// fixed or error), and with fix unsets the Redundant kind. Foreign values
+// are reported with the way to chain them, never changed.
+//
+// A value in local config is shared by every worktree of the repo. Main
+// checkouts are checked before linked worktrees, so a fix of a local value
+// happens (and is named) at the main checkout, and a local value that reads
+// the same in several worktrees is reported once. A relative value can read
+// differently in a linked worktree (.git/hooks there is not the repo's own
+// hooks dir); that is its own finding and is reported under that worktree.
 func CheckAll(ctx context.Context, r git.Runner, repos []string, fix bool, out io.Writer) Summary {
 	var s Summary
 	globalMissing := false
-	for _, repo := range repos {
+	sharedSeen := map[string]bool{}
+	ordered := append([]string(nil), repos...)
+	sort.SliceStable(ordered, func(i, j int) bool { return isMainCheckout(ordered[i]) && !isMainCheckout(ordered[j]) })
+	for _, repo := range ordered {
 		res, err := Inspect(ctx, r, repo)
 		if err != nil {
 			s.Errors++
@@ -134,8 +152,10 @@ func CheckAll(ctx context.Context, r git.Runner, repos []string, fix bool, out i
 			for n := 0; err == nil && res.Fixable() && n < 4; n++ {
 				var after Result
 				if after, err = Fix(ctx, r, res); err == nil {
-					s.Fixed++
-					fmt.Fprintf(out, "fixed      %s: removed core.hooksPath = %q (%s config)\n", repo, res.Value, res.Scope)
+					for _, v := range res.Values { // Fix unsets every value in the scope
+						s.Fixed++
+						fmt.Fprintf(out, "fixed      %s: removed core.hooksPath = %q (%s config)\n", owner(repo, res), v, res.Scope)
+					}
 					res = after
 				}
 			}
@@ -147,6 +167,13 @@ func CheckAll(ctx context.Context, r git.Runner, repos []string, fix bool, out i
 			if res.Kind == OK {
 				continue
 			}
+		}
+		if res.Scope == "local" {
+			key := canonical(res.HooksDir) + "\x00" + res.Kind.String() + "\x00" + res.Value
+			if sharedSeen[key] {
+				continue // already reported under another worktree of this repo
+			}
+			sharedSeen[key] = true
 		}
 		s.Remaining++
 		switch {
@@ -161,4 +188,23 @@ func CheckAll(ctx context.Context, r git.Runner, repos []string, fix bool, out i
 	}
 	fmt.Fprintf(out, "%d repos checked, %d fixed, %d overrides remain\n", s.Checked, s.Fixed, s.Remaining)
 	return s
+}
+
+// isMainCheckout: dir holds a .git directory (a linked worktree holds a
+// .git file pointing into the main one).
+func isMainCheckout(dir string) bool {
+	fi, err := os.Stat(filepath.Join(dir, ".git"))
+	return err == nil && fi.IsDir()
+}
+
+// owner names where a value lives: a local value belongs to the repo, so it
+// is named by the main checkout (<main>/.git is the common dir); a worktree
+// value, or one in a repo laid out otherwise, by the path that was checked.
+func owner(repo string, res Result) string {
+	if res.Scope == "local" {
+		if common := filepath.Dir(res.HooksDir); filepath.Base(common) == ".git" {
+			return filepath.Dir(common)
+		}
+	}
+	return repo
 }

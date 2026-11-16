@@ -160,6 +160,13 @@ func Inspect(ctx context.Context, r git.Runner, dir string) (Result, error) {
 	base := top
 	if base == "" {
 		base = gitDir // bare repo: hooks run with the git dir as cwd
+		// dir may instead be the .git dir of a non-bare repo (git -C <repo>/.git,
+		// --git-dir=<repo>/.git), where git reports no toplevel; its hooks
+		// still run in the worktree.
+		if out, err := r.Run(ctx, "-C", dir, "rev-parse", "--is-bare-repository"); err == nil &&
+			strings.TrimSpace(string(out)) == "false" && filepath.Base(common) == ".git" {
+			base = filepath.Dir(common)
+		}
 	}
 	// An empty value is an override of its own (no hooks dir at all), never a
 	// path: resolving it would read it as the base directory.
@@ -239,6 +246,9 @@ func Advice(res Result) string {
 		return fmt.Sprintf("gss hooks check --fix %s  (the value points at the repo's own hooks dir, which the global hooks already run after their check, so removing it loses nothing)", res.Repo)
 	case res.Kind == Redundant:
 		return fmt.Sprintf("the value points at the repo's own hooks dir but comes from %s config; remove it there (gss only edits a repo's own config)", scopeName(res.Scope))
+	case !repoScope(res.Scope):
+		return fmt.Sprintf("make %s/<hook> run the hooks in %q (the global hooks exec that file after the privacy check), then remove the value from %s config, where it is set (gss only edits a repo's own config; for command scope, drop the -c, --config-env or GIT_CONFIG_* that sets it)",
+			res.HooksDir, res.Value, scopeName(res.Scope))
 	default:
 		return fmt.Sprintf("make %s/<hook> run the hooks in %q (the global hooks exec that file after the privacy check), then: git -C %s config --%s --unset core.hooksPath",
 			res.HooksDir, res.Value, res.Repo, unsetScope(res.Scope))
@@ -263,6 +273,12 @@ func scopeName(scope string) string {
 		return "repo"
 	}
 	return scope
+}
+
+// repoScope: the value lives in the repo's own config ("" is a line with no
+// scope, read as local), where git config --local/--worktree can unset it.
+func repoScope(scope string) bool {
+	return scope == "local" || scope == "worktree" || scope == ""
 }
 
 func unsetScope(scope string) string {
@@ -300,11 +316,25 @@ func resolve(val, base string) string {
 	return canonical(val)
 }
 
-// canonical cleans p and resolves symlinks when the path exists.
+// canonical cleans p and resolves symlinks in it. When p does not exist (a
+// hooks dir not yet created), its nearest existing ancestor is resolved and
+// the missing part appended, so a path reached through a symlinked parent
+// still compares equal to the one git reports.
 func canonical(p string) string {
 	p = filepath.Clean(p)
 	if real, err := filepath.EvalSymlinks(p); err == nil {
 		return real
 	}
-	return p
+	dir, rest := p, ""
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return p
+		}
+		rest = filepath.Join(filepath.Base(dir), rest)
+		dir = parent
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(real, rest)
+		}
+	}
 }

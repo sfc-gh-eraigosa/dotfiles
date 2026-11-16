@@ -11,7 +11,10 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/hookguard"
 )
 
-var hooksFix bool
+var (
+	hooksFix  bool
+	hooksExit = os.Exit // a test seam, as gcExit
+)
 
 var hooksCmd = &cobra.Command{
 	Use:   "hooks",
@@ -47,7 +50,7 @@ gss refuses to push from a repo with an override for the same reason.`,
 		}
 		s := hookguard.CheckAll(ctx, runner, repos, hooksFix, cmd.OutOrStdout())
 		if s.Remaining > 0 || s.Errors > 0 {
-			os.Exit(1)
+			hooksExit(1)
 		}
 	},
 }
