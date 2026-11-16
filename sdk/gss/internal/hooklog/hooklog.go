@@ -89,15 +89,18 @@ func Build(now time.Time, host, cwd, hook, status string, env Env) (Entry, error
 	return e, nil
 }
 
-// lockWait bounds how long a hook waits for another run's trim. Past it the
-// line is still appended (O_APPEND keeps appends whole) and only the trim is
-// skipped, so a hook is never held up for longer than this.
+// lockWait bounds how long a hook waits for the lock. Past it the line is
+// still appended (O_APPEND keeps appends whole) and the trim is skipped, so a
+// hook is never held up for longer than this. Only a holder stuck for longer
+// (a trim of a 2 MiB file takes milliseconds) leaves an append unlocked; trim
+// then carries over what was appended during its copy, so such a line can be
+// lost only in the moment between that carry-over and the rename.
 const lockWait = time.Second
 
 // Append writes e as one JSON line, creating the directory. Holding an
 // exclusive lock on <path>.lock it also trims the file once it has grown past
-// MaxBytes, so two runs cannot trim at once or drop a line appended between a
-// trim's read and its rename.
+// MaxBytes, so two runs cannot trim at once and every locked append waits for a
+// running trim.
 func Append(path string, e Entry) error {
 	line, err := json.Marshal(e)
 	if err != nil {
@@ -142,6 +145,12 @@ func trim(path string) error {
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, keep, 0o600); err != nil {
 		return err
+	}
+	// Carry over anything appended without the lock while copying.
+	if now, err := os.ReadFile(path); err == nil && len(now) > len(raw) && bytes.HasPrefix(now, raw) {
+		if err := os.WriteFile(tmp, append(keep, now[len(raw):]...), 0o600); err != nil {
+			return err
+		}
 	}
 	return os.Rename(tmp, path)
 }
