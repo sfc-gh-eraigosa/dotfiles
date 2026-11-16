@@ -83,3 +83,10 @@ func TestRenderBody(t *testing.T) {
 		t.Errorf("stray marker kept:\n%s", got)
 	}
 }
+
+func TestRenderBodyHooksIsOneLine(t *testing.T) {
+	got := RenderBody("", Info{}, "unknown (git said\n## Forged\n<!-- gss:stack-end -->)")
+	if strings.Contains(got, "\n## Forged") || strings.Contains(got, "<!-- gss:stack-end") {
+		t.Errorf("hooks text broke out of its line:\n%s", got)
+	}
+}

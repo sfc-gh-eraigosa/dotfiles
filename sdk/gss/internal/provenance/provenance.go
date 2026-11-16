@@ -139,7 +139,7 @@ func renderSection(info Info, hooks string) string {
 		fmt.Fprintf(&b, "- Host: `%s` (`gss provenance show --host <name>` maps a name to it)\n", info.HostID)
 	}
 	if hooks != "" {
-		fmt.Fprintf(&b, "- Privacy hooks: %s\n", hooks)
+		fmt.Fprintf(&b, "- Privacy hooks: %s\n", oneLine(hooks))
 	}
 	b.WriteString(markerEnd)
 	return b.String()
@@ -153,6 +153,17 @@ func clean(s string) string {
 	s = unsafeRe.ReplaceAllString(strings.TrimSpace(s), "")
 	if len(s) > 80 {
 		s = s[:80]
+	}
+	return s
+}
+
+// oneLine keeps a free-text value (the hooks state can carry a git error) on
+// one list line, without HTML comments that could forge a gss marker.
+func oneLine(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	s = strings.NewReplacer("<!--", "", "-->", "").Replace(s)
+	if len(s) > 200 {
+		s = s[:200]
 	}
 	return s
 }
