@@ -141,7 +141,7 @@ func (s *Service) AutoCheckpoint(ctx context.Context, opts AutoOpts) (AutoResult
 	// Delegate the rebase + push + PR to the shared body (also used by the
 	// public Checkpoint). A rebase conflict is a skip (diagnostic +
 	// non-zero), not a hard failure.
-	if _, err := s.runCheckpoint(ctx, ref, reg, fi, wi); err != nil {
+	if _, err := s.runCheckpoint(ctx, ref, reg, fi, wi, CheckpointOpts{}); err != nil {
 		if stderrors.Is(err, errors.ErrRebaseConflict) {
 			return s.autoSkip(w, "rebase conflict; resolve in the worktree then re-run")
 		}

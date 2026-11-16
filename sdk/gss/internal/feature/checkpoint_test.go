@@ -101,7 +101,7 @@ func TestCheckpoint_FirstCreateSeedsTitleAndBodyFromWorkerMD(t *testing.T) {
 	if e == nil || e.Num != num {
 		t.Fatalf("expected a PREdit on the new PR #%d after create; got %+v", num, e)
 	}
-	if !strings.Contains(e.EditOpts.Body, fmt.Sprintf("**#%d — erai/api (base: `main`)** ← you are here", num)) {
+	if !strings.Contains(e.EditOpts.Body, fmt.Sprintf("**#%d — api (base: `main`)** ← you are here", num)) {
 		t.Errorf("stack row not renumbered after create:\n%s", e.EditOpts.Body)
 	}
 	if strings.Contains(e.EditOpts.Body, "(no PR yet)") {

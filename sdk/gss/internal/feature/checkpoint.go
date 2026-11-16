@@ -17,6 +17,13 @@ import (
 // CheckpointOpts configures `feature checkpoint`.
 type CheckpointOpts struct {
 	WorkerRef string // feature/user/purpose[-suffix]
+	// Body, when non-empty, replaces the PR body's free-form prose (the
+	// text outside the gss-managed sections). The stack and feature-notes
+	// sections are re-rendered as on every checkpoint. `--body-from <file>`.
+	Body string
+	// RefreshBody replaces the prose with WORKER.md's Goal and notes again,
+	// the same text a new PR is seeded with. `--refresh-body`.
+	RefreshBody bool
 }
 
 // CheckpointResult reports the outcome.
@@ -59,13 +66,16 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 		return CheckpointResult{}, fmt.Errorf("%w: no such worker %q", errors.ErrInvalidIdent, opts.WorkerRef)
 	}
 
-	return s.runCheckpoint(ctx, ref, reg, fi, wi)
+	return s.runCheckpoint(ctx, ref, reg, fi, wi, opts)
 }
 
 // runCheckpoint does the actual rebase+push+PR work, shared by Checkpoint
 // (above) and AutoCheckpoint (auto.go), which have already resolved
 // ref/reg/fi/wi themselves.
-func (s *Service) runCheckpoint(ctx context.Context, ref identity.WorkerRef, reg registry.Registry, fi, wi int) (CheckpointResult, error) {
+func (s *Service) runCheckpoint(ctx context.Context, ref identity.WorkerRef, reg registry.Registry, fi, wi int, opts CheckpointOpts) (CheckpointResult, error) {
+	if opts.Body != "" && opts.RefreshBody {
+		return CheckpointResult{}, fmt.Errorf("checkpoint: --body-from and --refresh-body are exclusive")
+	}
 	feat := reg.Features[fi]
 	w := feat.Workers[wi]
 	base := w.BaseBranch
@@ -109,6 +119,19 @@ func (s *Service) runCheckpoint(ctx context.Context, ref identity.WorkerRef, reg
 	existing := s.currentPRBody(ctx, w.PRURL)
 	if w.PRURL == "" {
 		existing = s.workerProse(w)
+	}
+	// A body refresh is the only way prose already on GitHub is replaced:
+	// an explicit file, or WORKER.md read again. Without one the PR's text
+	// is kept (the rule above).
+	switch {
+	case strings.TrimSpace(opts.Body) != "":
+		existing = opts.Body
+	case opts.RefreshBody:
+		if prose := s.workerProse(w); prose != "" {
+			existing = prose
+		} else {
+			existing = w.Description
+		}
 	}
 	body := renderPRBody(feat, ref, existing, notes)
 
@@ -223,6 +246,7 @@ func findWorker(reg registry.Registry, ref identity.WorkerRef) (int, int) {
 func renderPRBody(f registry.Feature, here identity.WorkerRef, existing, notes string) string {
 	view := stack.StackView{Feature: f.Name}
 	desc := ""
+	siblings := siblingLabels(f)
 	for _, w := range f.Workers {
 		cand := identity.WorkerRef{Feature: f.Name, User: w.User, Purpose: w.Purpose, Suffix: w.Suffix}
 		isHere := cand.SameWorker(here)
@@ -231,8 +255,8 @@ func renderPRBody(f registry.Feature, here identity.WorkerRef, existing, notes s
 		}
 		view.Entries = append(view.Entries, stack.Entry{
 			PRNumber: prNumber(w.PRURL),
-			Ref:      w.User + "/" + cand.Leaf(),
-			Base:     w.BaseBranch,
+			Ref:      cand.Leaf(),
+			Base:     displayBase(w.BaseBranch, siblings),
 			Here:     isHere,
 		})
 	}
@@ -241,6 +265,37 @@ func renderPRBody(f registry.Feature, here identity.WorkerRef, existing, notes s
 		base = desc
 	}
 	return stack.RenderBody(stack.RenderNotes(base, notes), view)
+}
+
+// siblingLabels maps each worker branch in the feature to how the stack block
+// names it: the PR number when it has one, else the worker's leaf. Branch
+// names carry the user segment (the git login slug), and PR bodies are
+// public, so the block never prints a raw worker branch.
+func siblingLabels(f registry.Feature) map[string]string {
+	m := make(map[string]string, len(f.Workers))
+	for _, w := range f.Workers {
+		cand := identity.WorkerRef{Feature: f.Name, User: w.User, Purpose: w.Purpose, Suffix: w.Suffix}
+		label := cand.Leaf()
+		if n := prNumber(w.PRURL); n > 0 {
+			label = fmt.Sprintf("#%d", n)
+		}
+		m[w.Branch] = label
+	}
+	return m
+}
+
+// displayBase is the base branch as the stack block shows it: a sibling
+// worker's branch becomes its label, another feature's worker branch
+// (feature/<f>/<user>/<leaf>) drops the user segment, anything else (main, a
+// release branch) is shown as is.
+func displayBase(base string, siblings map[string]string) string {
+	if label, ok := siblings[base]; ok {
+		return label
+	}
+	if parts := strings.Split(base, "/"); len(parts) == 4 && parts[0] == "feature" {
+		return parts[1] + "/" + parts[3]
+	}
+	return base
 }
 
 // currentPRBody fetches a PR's body so renderPRBody can preserve it. A failed
