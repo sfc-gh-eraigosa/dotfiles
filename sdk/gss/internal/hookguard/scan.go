@@ -176,8 +176,8 @@ func CheckAll(ctx context.Context, r git.Runner, repos []string, fix bool, out i
 			sharedSeen[key] = true
 		}
 		s.Remaining++
-		switch {
-		case res.Kind == Foreign:
+		switch res.Kind {
+		case Foreign:
 			fmt.Fprintf(out, "foreign    %s: core.hooksPath = %q (%s config), so the privacy guard does not run here. Fix by hand: %s\n", repo, res.Value, scopeName(res.Scope), Advice(res))
 		default:
 			fmt.Fprintf(out, "redundant  %s: core.hooksPath = %q (%s config), so the privacy guard does not run here. Fix: %s\n", repo, res.Value, scopeName(res.Scope), Advice(res))

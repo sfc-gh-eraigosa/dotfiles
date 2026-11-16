@@ -31,7 +31,6 @@ import (
 	stderrors "errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -195,7 +194,9 @@ func configGet(ctx context.Context, r git.Runner, dir string, flags ...string) (
 	args := append(append([]string{"-C", dir, "config"}, flags...), Key)
 	out, err := r.Run(ctx, args[0], args[1:]...)
 	if err != nil {
-		var ee *exec.ExitError
+		// Matched by method, not *exec.ExitError: os/exec stays inside the
+		// internal/git seam (scripts/check-deps.sh).
+		var ee interface{ ExitCode() int }
 		if stderrors.As(err, &ee) && ee.ExitCode() == 1 {
 			return "", nil
 		}

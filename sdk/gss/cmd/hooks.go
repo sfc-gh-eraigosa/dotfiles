@@ -80,10 +80,25 @@ func scanParents() []string {
 	}
 	var parents []string
 	for _, root := range []string{"github", "GitHub"} {
+		// On a case-insensitive filesystem (macOS) ~/GitHub IS ~/github;
+		// globbing both would list every org twice.
+		if root == "GitHub" && sameDir(filepath.Join(home, "github"), filepath.Join(home, "GitHub")) {
+			continue
+		}
 		orgs, _ := filepath.Glob(filepath.Join(home, root, "*"))
 		parents = append(parents, orgs...)
 	}
 	return append(parents, filepath.Join(home, "git"))
+}
+
+// sameDir: a and b both exist and are the same directory.
+func sameDir(a, b string) bool {
+	ai, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	bi, err := os.Stat(b)
+	return err == nil && os.SameFile(ai, bi)
 }
 
 func init() {

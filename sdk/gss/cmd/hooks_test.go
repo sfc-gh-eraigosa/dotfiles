@@ -89,6 +89,10 @@ func TestScanParents(t *testing.T) {
 	}
 	got := scanParents()
 	want := []string{filepath.Join(home, "github", "a"), filepath.Join(home, "GitHub", "b"), filepath.Join(home, "git")}
+	if sameDir(filepath.Join(home, "github"), filepath.Join(home, "GitHub")) {
+		// Case-insensitive filesystem (macOS): one dir, each org listed once.
+		want = []string{filepath.Join(home, "github", "a"), filepath.Join(home, "github", "b"), filepath.Join(home, "git")}
+	}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("scanParents = %v, want %v", got, want)
 	}
