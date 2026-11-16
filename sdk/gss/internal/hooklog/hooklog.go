@@ -10,6 +10,7 @@ package hooklog
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -17,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gofrs/flock"
 )
 
 // Results a hook run can have.
@@ -86,8 +89,15 @@ func Build(now time.Time, host, cwd, hook, status string, env Env) (Entry, error
 	return e, nil
 }
 
-// Append writes e as one JSON line, creating the directory, and trims the
-// file when it has grown past MaxBytes.
+// lockWait bounds how long a hook waits for another run's trim. Past it the
+// line is still appended (O_APPEND keeps appends whole) and only the trim is
+// skipped, so a hook is never held up for longer than this.
+const lockWait = time.Second
+
+// Append writes e as one JSON line, creating the directory. Holding an
+// exclusive lock on <path>.lock it also trims the file once it has grown past
+// MaxBytes, so two runs cannot trim at once or drop a line appended between a
+// trim's read and its rename.
 func Append(path string, e Entry) error {
 	line, err := json.Marshal(e)
 	if err != nil {
@@ -95,6 +105,13 @@ func Append(path string, e Entry) error {
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
+	}
+	lk := flock.New(path + ".lock")
+	ctx, cancel := context.WithTimeout(context.Background(), lockWait)
+	locked, _ := lk.TryLockContext(ctx, 20*time.Millisecond)
+	cancel()
+	if locked {
+		defer func() { _ = lk.Unlock() }()
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -108,25 +125,39 @@ func Append(path string, e Entry) error {
 	if werr != nil {
 		return werr
 	}
-	if serr == nil && st.Size() > MaxBytes {
+	if locked && serr == nil && st.Size() > MaxBytes {
 		return trim(path)
 	}
 	return nil
 }
 
-// trim keeps the newest half of the lines.
+// trim keeps the newest whole lines that fit in half of MaxBytes, so a
+// trimmed file is well under the limit however long its lines are.
 func trim(path string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	lines := bytes.SplitAfter(raw, []byte("\n"))
-	keep := bytes.Join(lines[len(lines)/2:], nil)
+	keep := newestWithin(raw, MaxBytes/2)
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, keep, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// newestWithin is the tail of raw made of the newest whole lines whose total
+// is at most limit bytes. A last line longer than limit is dropped too: the
+// lines this package writes are a few hundred bytes, so such a line was not
+// written by it.
+func newestWithin(raw []byte, limit int) []byte {
+	lines := bytes.SplitAfter(raw, []byte("\n"))
+	start, size := len(lines), 0
+	for start > 0 && size+len(lines[start-1]) <= limit {
+		size += len(lines[start-1])
+		start--
+	}
+	return bytes.Join(lines[start:], nil)
 }
 
 func shortHost(h string) string {

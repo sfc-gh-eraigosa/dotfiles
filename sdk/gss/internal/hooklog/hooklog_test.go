@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -114,5 +116,52 @@ func TestAppendTrimsPastMax(t *testing.T) {
 	}
 	if !strings.HasSuffix(string(raw), "\"hook\":\"pre-push\",\"result\":\"pass\",\"exit\":0}\n") {
 		t.Errorf("newest line lost by the trim: %q", string(raw[len(raw)-120:]))
+	}
+}
+
+func TestNewestWithin(t *testing.T) {
+	raw := []byte("aaaa\nbb\ncc\n")
+	if got := string(newestWithin(raw, 6)); got != "bb\ncc\n" {
+		t.Errorf("newestWithin(6) = %q", got)
+	}
+	if got := string(newestWithin(raw, 100)); got != string(raw) {
+		t.Errorf("newestWithin(100) = %q", got)
+	}
+	// One line longer than the limit: nothing is kept, so the next append
+	// does not trim again.
+	if got := newestWithin([]byte(strings.Repeat("x", 50)+"\n"), 10); len(got) != 0 {
+		t.Errorf("an over-long line was kept: %d bytes", len(got))
+	}
+}
+
+// TestAppendConcurrentKeepsEveryLine: runs that append while the file
+// crosses MaxBytes lose no line to a trim.
+func TestAppendConcurrentKeepsEveryLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "runs.jsonl")
+	pad := strings.Repeat(`{"pad":"`+strings.Repeat("x", 1000)+`"}`+"\n", MaxBytes/1010)
+	if err := os.WriteFile(path, []byte(pad), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const n = 40
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			e, _ := Build(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), "h", "/r", "hook-"+strconv.Itoa(i), "0", envOf(nil))
+			if err := Append(path, e); err != nil {
+				t.Errorf("Append %d: %v", i, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	raw, _ := os.ReadFile(path)
+	for i := 0; i < n; i++ {
+		if !strings.Contains(string(raw), `"hook":"hook-`+strconv.Itoa(i)+`"`) {
+			t.Errorf("line from run %d lost", i)
+		}
+	}
+	if len(raw) > MaxBytes {
+		t.Errorf("file not trimmed: %d bytes", len(raw))
 	}
 }
