@@ -211,6 +211,12 @@ body is preserved across checkpoints, so write a real PR description and it
 stays. Put decisions that apply to the whole feature in FEATURE.md and they
 propagate to every worker's PR.
 
+To rewrite the prose after a fix round, use gss, not `gh pr edit`:
+`gss feature checkpoint --body-from <file>` (the file becomes the prose; `-`
+reads stdin) or `gss feature checkpoint --refresh-body` (WORKER.md's Goal and
+notes again). Both keep the managed sections. The stack block names workers by
+purpose and stacked bases by PR number, never by the user segment of a branch.
+
 Teardown: `gss feature done <worker-ref>` removes a worker;
 `gss feature done --feature <name>` removes a feature that has no workers
 (both refuse to discard an edited FEATURE.md without `--force`).
@@ -235,7 +241,8 @@ worker worktree. To queue a worker PR, use `gss feature pr --ready --merge`
   the stack section appended and this PR's own row already numbered. So fill
   Goal and notes in `WORKER.md` *before* the first checkpoint and there is
   nothing to `gh pr edit` afterwards. Later checkpoints preserve whatever the
-  PR body says on GitHub (edit it there, not in `WORKER.md`); only
+  PR body says on GitHub (edit it there, or refresh it with `--body-from` /
+  `--refresh-body`); only
   `FEATURE.md`'s notes and the stack block are re-mirrored each time.
 - **`WORKER.md` placement (issue #132)**: `WORKER.md` is seeded **outside** the
   worker's git worktree, at

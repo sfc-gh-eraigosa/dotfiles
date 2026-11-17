@@ -1037,17 +1037,24 @@ navigate the stack without leaving GitHub:
 
 This PR is part of a stack on **feature/auth**.
 
-- #42 — eraigosa/api (base: `main`) ← parent of this PR
-- **#43 — eraigosa/ui-moss (base: `feature/auth/eraigosa/api`)** ← you are here
-- #44 — bot42/docs (base: `feature/auth/eraigosa/ui-moss`)
+- #42 — api (base: `main`) ← parent of this PR
+- **#43 — ui-moss (base: `#42`)** ← you are here
+- #44 — docs (base: `#43`)
 
 Review bottom-up. Merge bottom-up; gss will re-target the rest of the stack
 when a parent merges.
 <!-- gss:stack-end -->
 ```
 
+Rows name a worker by its purpose and a stacked base by its PR number (its
+purpose until it has one). The user segment of a branch is never printed: PR
+bodies are public and that segment is the git login slug.
+
 The marker comments make the section idempotent — gss rewrites between the
-markers without touching free-form body content.
+markers without touching free-form body content. The prose outside the markers is
+written once, when the PR is created, and kept after that; `checkpoint
+--body-from <file>` or `--refresh-body` (WORKER.md again) replaces it on
+request.
 
 ### "Main" PR
 
