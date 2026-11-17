@@ -13,16 +13,16 @@
 
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| PR 1 (docs, T1–T7, T9, T10) | `fleet-vault-keys/${USER}/design` | `feature/fleet-vault-keys/${USER}/design` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/fleet-vault-keys/${USER}/design` | #452 | draft |
-| PR 2 (T11) | `fleet-vault-keys/${USER}/pull` | `feature/fleet-vault-keys/${USER}/pull` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/fleet-vault-keys/${USER}/pull` | — | local only |
+| PR 1 (docs, T1–T7, T9, T10) + PR 2 (T11) | `fleet-vault-keys/${USER}/design` | — | worktree removed after merge | #452 | merged 2026-11-15 (90d1ed1); #457 (pull) was squash-merged INTO #452's branch first |
+| PR 3 (T8, T12–T16) | `fleet-vault-keys/${USER}/lifecycle` | `feature/fleet-vault-keys/${USER}/lifecycle` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/fleet-vault-keys/${USER}/lifecycle` | — (no PR yet) | base `main`; = main + T8 (81b7b23), local only; old head kept as branch `backup/lifecycle-pre-rebase-20261115` |
 
 ### Stack (4 stacked PRs — operator ruling 2026-11-13; refresh from `gss feature list --feature fleet-vault-keys --tree`)
 
 | # | PR | Worker | Base | Tasks | Done | State |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| 1 | save/push — #452 | `design` | `main` | docs, T1–T7, T9, T10 | T1–T7, T9, T10 | draft · built, awaiting checkpoint |
-| 2 | pull — (not opened) | `pull` | PR 1 | T11 | T11 | built (22daf29), not pushed |
-| 3 | rest — (not opened) | `lifecycle` (created at T8) | PR 2 | T8, T12–T16 | — | not started |
+| 1 | save/push — #452 | `design` | `main` | docs, T1–T7, T9, T10 | all | **merged** 2026-11-15 (90d1ed1) |
+| 2 | pull — #457 | `pull` | PR 1 | T11 | T11 | **merged** into PR 1's branch, landed with #452 |
+| 3 | rest — (not opened) | `lifecycle` | `main` | T8, T12–T16 | T8 built, unreviewed | in progress |
 | 4 | 1Password live gate — (not opened) | `op` (after PR 3) | PR 3 | G1 + any fixes it finds | adapter already on PR 1 | waiting on a 1Password account |
 
 ## 1. Task ledger
@@ -37,10 +37,10 @@
 | T5 vault.yaml + gate | done | 3d78151, dabe23c | `go test -cover ./internal/featflag/ ./cmd/` → PASS (featflag 96.9 %, cmd 77.0 %; only the 3 known cmd failures); `gff lint .github/gff/features.yaml` → 0 | fail-closed; ~ expanded; unknown YAML keys rejected; golden keys-sync argv captured |
 | T6 keystore | done | cec71aa, 7065ab2 | `go test -cover ./internal/keystore/` → PASS 75.0 %; ssh-keygen fingerprint match | x/crypto v0.59.0; O_EXCL+counter backups, fsync'd, path returned on error |
 | T7 agent + askpass | done | f10db28, 93f3f62 | `go test -race -count=3 -cover ./internal/agent/` → PASS 87.9 %; real ssh-add vs throwaway agent (OpenSSH_10.5p1) PASS | success = ssh-add exit 0 (keychain reloads); /usr/bin/ssh-add on darwin |
-| T8 pre-flight | todo | | | |
-| T9 vault setup/status | done | d81c2da, 4525bba, 1325557, 7279c29 | `go test ./cmd/` → PASS except the 3 known failures; `go vet ./...` clean | every verb wrapped by `gated()` (walk test); known_hosts lists unresolved aliases (no entry, lookup fail, unreadable file) — 3 fix rounds |
-| T10 vault push | done | 65d3af6, 504062b | `go test -cover ./cmd/ ./internal/keystore/` → PASS except the 3 known failures, cmd 78.4 %, keystore 76.3 %; `go vet ./...` clean | captures the EXISTING key (encrypted: typed passphrase verified; plain: vault copy encrypted with a random passphrase); `--allow-partial` merges known_hosts; `--encrypt-local` verifies then deletes the plaintext backup |
-| T11 vault pull | done (pull worker) | f50acdc | `go test -cover ./cmd/` → PASS except the 3 known failures, cmd 77.9 %; `go vet ./...` clean | review clean; restore refuses a different key without `--replace-key`; darwin keychain block only after y/N |
+| T8 pre-flight | built, review pending | 81b7b23 (was 6fe2a40) | builds + `go vet` clean on main after rebase; tests not re-run | KNOWN ISSUE: existing status/update/keys-sync/tui tests now reach the real ~/.ssh and agent through `keyLocked` — must be stubbed (test-isolation rule) before review |
+| T9 vault setup/status | done (merged #452) | d81c2da, 4525bba, 1325557, 7279c29 | `go test ./cmd/` → PASS except the 3 known failures; `go vet ./...` clean | every verb wrapped by `gated()` (walk test); known_hosts lists unresolved aliases (no entry, lookup fail, unreadable file) — 3 fix rounds |
+| T10 vault push | done (merged #452) | 65d3af6, 504062b | `go test -cover ./cmd/ ./internal/keystore/` → PASS except the 3 known failures, cmd 78.4 %, keystore 76.3 %; `go vet ./...` clean | captures the EXISTING key (encrypted: typed passphrase verified; plain: vault copy encrypted with a random passphrase); `--allow-partial` merges known_hosts; `--encrypt-local` verifies then deletes the plaintext backup |
+| T11 vault pull | done (merged via #457 → #452) | f50acdc | `go test -cover ./cmd/` → PASS except the 3 known failures, cmd 77.9 %; `go vet ./...` clean | review clean; restore refuses a different key without `--replace-key`; darwin keychain block only after y/N |
 | T12 keys unlock | todo | | | |
 | T13 runner probe + keys rotate | todo | | | |
 | T14 roster-aware sync/prune | todo | | | |
@@ -100,3 +100,21 @@ never silently patched.
 | 2026-11-13 | planning | Plan + execution trio written on worker `design` (PR #452). |
 | 2026-11-13 | build 1 | T1, T2, T4 (+T0 lpass live), T5, T6, T7 done, subagent-driven with per-task review. Rulings: lpass-first, op deferred; T0 as a Go `live` test. |
 | 2026-11-13 | build 2 | T9 (3 fix rounds), T10 push (1 fix round) on `design`; T11 pull in parallel on new worker `pull`, rebased onto T10. |
+| 2026-11-14/15 | review + merge | Code reviews of #452/#457 → 3 fix rounds (sign-in hang, all-or-nothing pull, `IgnoreUnknown UseKeychain`, hashed/rotated host keys, atomic writes; round 2 after #457 merged into #452: plain local key vs encrypted vault copy, push keeps other workstations' known_hosts lines, multi-alias `Host` lines, refuse unreadable `key/<ws>`, empty workstation, ssh-add deadline, messages naming PR-3 verbs). gosec G302 nosec on two dir chmods. Rebased over #460 (`keys enroll`): `writeConfig` merges symlink-safe atomic write + skip-empty-backup; keys-sync golden re-baselined with the backup stamp pinned. #452 merged 90d1ed1. `lifecycle` rebased onto main (T8 only). The git-ignored SDD ledger died with the design worktree — its rulings/deferred list are now §6 below. |
+
+## 6. Rulings and deferred review findings (carried from the deleted SDD ledger)
+
+**Rulings (binding for PR 3):**
+- Push refuses partial known_hosts without `--allow-partial`; push is merge-only for inventory AND known_hosts (keeps other workstations' lines; replaces lines for this machine's resolved hosts). `vault status` runs the same merge as push.
+- `--encrypt-local` deletes the plaintext backup only after verifying the rewritten file.
+- `pull --as <name>` means "this machine becomes <name>" (saves vault.yaml's workstation only once the key exists). Pull is all-or-nothing (plan everything, then write); per-host known_hosts merge; `@revoked` always added.
+- Inventory removals are out of scope for push (plan T14 territory).
+- Live vault writes only with operator approval; tests never touch the real agent, keychain, vault or ~/.ssh.
+
+**Deferred findings — fold into PR 3 or the final whole-branch review:**
+- T9: install hint hardcodes the lastpass package; "not configured" reuses exitError; no ctx timeout on vendor calls; missing setup tests; gate test walks top-level commands only; ssh-keygen output discarded.
+- T10: non-ed25519 keys accepted; `Created` set at push time; `ssh -G` failure leaves `Names=[alias]`; WARNING printed twice; a comma-list known_hosts line spanning a local and a foreign host is dropped whole; status shows the merged known_hosts diff even when push would withhold it (unresolved, no `--allow-partial`).
+- T11: cfgplan drops ProxyJump etc.; darwin UseKeychain decline re-asks every run; config backup name lost its trailing Z; dangling symlinks; extra Host aliases not used as candidates.
+- #452: setup's bufio on piped stdin; unreadable roster doesn't set ok=false; status on a fresh machine hides the unresolved list; hint printed twice; .pub removal ignores errors.
+- Quality/perf: `ssh-keygen -F` spawned per alias×file×name (use `knownHostsLineMatches` in-process); `confirm()` duplicates `askYesNo`; `vaultActive` unused until T14 wires it.
+- Messages: after PR 3 lands `keys unlock`/`rotate`, re-point the push/pull hints (round 2 removed those mentions) and the features.yaml description.
