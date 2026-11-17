@@ -57,6 +57,7 @@ privacy_hooks_chain() {
     local_hook="$gitdir/hooks/$name"
     self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
     if [ -x "$local_hook" ] && [ "$(cd "$(dirname "$local_hook")" && pwd)/$(basename "$local_hook")" != "$self" ]; then
+        _hl_g="$(command -v gss || echo "${HOME:-}/opt/bin/gss")"; [ -x "$_hl_g" ] && "$_hl_g" hooks log "$name" chained </dev/null >/dev/null 2>&1 # the EXIT trap does not run across exec
         exec "$local_hook" "$@"
     fi
     return 0
