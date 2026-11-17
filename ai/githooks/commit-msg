@@ -12,6 +12,7 @@ trap '_hl_rc=$?; _hl_g="$(command -v gss || echo "${HOME:-}/opt/bin/gss")"; [ -x
 . "$(cd "$(dirname "$0")" && pwd)/_privacy_common.sh"
 privacy_hooks_load_rules "$0" || exit 1
 
+_pv_g="$(command -v gss || echo "${HOME:-}/opt/bin/gss")"; [ -x "$_pv_g" ] && "$_pv_g" provenance stamp "$1" </dev/null >/dev/null 2>&1 # provenance trailers on an assistant's commit, stamped before the check so it judges them too
 msg="$(grep -Ev '^#' "$1" 2>/dev/null || true)"
 privacy_hooks_judge commit-msg "$msg"
 privacy_hooks_chain commit-msg "$@"

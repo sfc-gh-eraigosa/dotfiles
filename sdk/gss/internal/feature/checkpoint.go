@@ -9,7 +9,9 @@ import (
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/errors"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/hookguard"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/identity"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/provenance"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/registry"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/stack"
 )
@@ -136,6 +138,9 @@ func (s *Service) runCheckpoint(ctx context.Context, ref identity.WorkerRef, reg
 	body := renderPRBody(feat, ref, existing, notes)
 
 	res := CheckpointResult{Ref: ref.String()}
+	if s.Provenance != nil {
+		body = provenance.RenderBody(body, *s.Provenance, s.hooksState(ctx, w.Worktree))
+	}
 	if w.PRURL == "" {
 		// Push the worker branch to origin BEFORE asking gh to open a PR.
 		// gh pr create only fills in head/base SHAs by looking them up via
@@ -353,4 +358,20 @@ func prNumber(url string) int {
 	}
 	n, _ := strconv.Atoi(m[1])
 	return n
+}
+
+// hooksState describes, for the PR's provenance section, whether the global
+// privacy git hooks run in the worktree.
+func (s *Service) hooksState(ctx context.Context, worktree string) string {
+	res, err := hookguard.Inspect(ctx, s.Git, worktree)
+	switch {
+	case err != nil:
+		return "unknown (" + err.Error() + ")"
+	case res.Kind != hookguard.OK:
+		return fmt.Sprintf("off: a repo-local core.hooksPath (%s) replaces the global hooks", res.Kind)
+	case res.Global == "":
+		return "none: no global core.hooksPath, so the privacy hooks are not installed"
+	default:
+		return "global (core.hooksPath not overridden in this worktree)"
+	}
 }
