@@ -10,6 +10,8 @@
 # stdin: one line per ref: <local ref> <local sha> <remote ref> <remote sha>
 # argv: <remote name> <remote url>
 set -u
+# shellcheck disable=SC2154 # assigned inside the trap string
+trap '_hl_rc=$?; _hl_g="$(command -v gss || echo "${HOME:-}/opt/bin/gss")"; [ -x "$_hl_g" ] && "$_hl_g" hooks log pre-push "$_hl_rc" </dev/null >/dev/null 2>&1' EXIT # one line per run in the hook-run log (gss hooks log); never changes the exit status
 # shellcheck source=_privacy_common.sh
 . "$(cd "$(dirname "$0")" && pwd)/_privacy_common.sh"
 privacy_hooks_load_rules "$0" || exit 1
