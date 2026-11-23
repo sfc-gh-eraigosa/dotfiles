@@ -293,11 +293,22 @@ assert_exit 0 Bash "cd $WT_PROBE && gss feature checkpoint"          "bare check
 # gss.approval-token.enabled`, and no gff or an unknown flag means off.
 rm -f "$HOME/.config/gss/approval.token"
 GFF_STUB="$(mktemp -d "${TMPDIR:-/tmp}/sg-gff.XXXXXX")"
-printf '#!/bin/sh\nexit ${GFF_STUB_RC:-1}\n' > "$GFF_STUB/gff"
+# The stub answers only the exact question the hook must ask; any other
+# arguments exit 2 (gff's "unknown key"), which reads as off.
+printf '#!/bin/sh\n[ "$*" = "enabled gss.approval-token.enabled" ] || exit 2\nexit ${GFF_STUB_RC:-1}\n' > "$GFF_STUB/gff"
 chmod +x "$GFF_STUB/gff"
-( export GSS_REQUIRE_APPROVAL=off
-  assert_exit 0 Bash "gss push"            "approval off: gss push runs with no approval file"
-  assert_exit 0 Bash "gss feature merged"  "approval off: feature merged runs with no approval file" )
+( export GSS_REQUIRE_APPROVAL=off PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 0 Bash "gss push"            "approval off beats a gff on: gss push runs with no approval file"
+  assert_exit 0 Bash "gss feature merged"  "approval off beats a gff on: feature merged runs" )
+( export GSS_REQUIRE_APPROVAL=' ON ' PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
+  assert_exit 2 Bash "gss push"            "GSS_REQUIRE_APPROVAL is trimmed and case-blind, as in gss" )
+# No gff on PATH at all: off. PATH keeps every directory except those that
+# hold a gff binary.
+NOGFF_PATH=""
+IFS=: read -ra _dirs <<< "$PATH"
+for _d in "${_dirs[@]}"; do [ -x "$_d/gff" ] || NOGFF_PATH="${NOGFF_PATH:+$NOGFF_PATH:}$_d"; done
+( unset GSS_REQUIRE_APPROVAL; export PATH="$NOGFF_PATH"
+  assert_exit 0 Bash "gss push"            "no gff installed: gss push runs (off)" )
 ( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
   assert_exit 2 Bash "gss push"            "gff flag on: gss push with no approval file is blocked" )
 ( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1

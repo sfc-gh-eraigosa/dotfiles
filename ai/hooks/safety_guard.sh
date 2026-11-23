@@ -238,7 +238,7 @@ fi
 # gss.approval-token.enabled is on, or GSS_REQUIRE_APPROVAL=on, is the token
 # required. gss itself reads the same switch (sdk/gss/internal/approval).
 gss_token_required() {
-    case "$(printf '%s' "${GSS_REQUIRE_APPROVAL:-}" | tr '[:upper:]' '[:lower:]')" in
+    case "$(printf '%s' "${GSS_REQUIRE_APPROVAL:-}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')" in
         on|true|1) return 0 ;;
         off|false|0) return 1 ;;
     esac
