@@ -12,9 +12,11 @@ func TestTokenRequired(t *testing.T) {
 	defer func(l func(string) (string, error), r func(...string) error) { lookPath, runGFF = l, r }(lookPath, runGFF)
 	found := func(string) (string, error) { return "/bin/gff", nil }
 	missing := func(string) (string, error) { return "", errors.New("not found") }
+	// gff answers only the exact key declared in .github/gff/features.yaml
+	// (TestFlagDeclared); any other question is an unknown key, exit 2.
 	on := func(args ...string) error {
-		if len(args) != 2 || args[0] != "enabled" || args[1] != FlagKey {
-			t.Fatalf("gff args = %v", args)
+		if len(args) != 2 || args[0] != "enabled" || args[1] != "gss.approval-token.enabled" {
+			return errors.New("exit status 2")
 		}
 		return nil
 	}

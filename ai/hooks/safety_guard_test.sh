@@ -307,8 +307,15 @@ chmod +x "$GFF_STUB/gff"
 NOGFF_PATH=""
 IFS=: read -ra _dirs <<< "$PATH"
 for _d in "${_dirs[@]}"; do [ -x "$_d/gff" ] || NOGFF_PATH="${NOGFF_PATH:+$NOGFF_PATH:}$_d"; done
-( unset GSS_REQUIRE_APPROVAL; export PATH="$NOGFF_PATH"
-  assert_exit 0 Bash "gss push"            "no gff installed: gss push runs (off)" )
+# jq builds the payload and the hook needs git: when either lives beside gff
+# the case would test an empty payload, so it is recorded as a failure.
+if PATH="$NOGFF_PATH" command -v jq >/dev/null 2>&1 && PATH="$NOGFF_PATH" command -v git >/dev/null 2>&1; then
+  ( unset GSS_REQUIRE_APPROVAL; export PATH="$NOGFF_PATH"
+    assert_exit 0 Bash "gss push"            "no gff installed: gss push runs (off)" )
+else
+  echo "FAIL: no gff installed: jq or git shares a directory with gff, so this case cannot run here"
+  echo FAIL >> "$RESULTS"
+fi
 ( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
   assert_exit 2 Bash "gss push"            "gff flag on: gss push with no approval file is blocked" )
 ( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
