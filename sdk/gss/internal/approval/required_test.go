@@ -36,6 +36,9 @@ func TestTokenRequired(t *testing.T) {
 		{"env off beats gff on", "off", found, on, false},
 		{"env 0", "0", found, on, false},
 		{"env junk falls through to gff", "maybe", found, on, true},
+		{"env trimmed: ' on '", " on ", missing, off, true},
+		{"env trimmed: ' off '", " off ", found, on, false},
+		{"only the ends are trimmed: 'o f f' falls through", "o f f", found, on, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -82,5 +85,17 @@ func TestNewVerifierDefaultOff(t *testing.T) {
 	t.Setenv(EnvOverride, "on")
 	if err := NewVerifier(path, noGit{}).Verify(context.Background(), ".", false); err == nil {
 		t.Fatal("GSS_REQUIRE_APPROVAL=on did not check the token")
+	}
+}
+
+// No override and no gff: NewVerifier's default is off, so a gated verb
+// runs without a token.
+func TestNewVerifierUnsetDefault(t *testing.T) {
+	defer func(l func(string) (string, error)) { lookPath = l }(lookPath)
+	lookPath = func(string) (string, error) { return "", errors.New("not found") }
+	t.Setenv(EnvOverride, "")
+	v := NewVerifier(filepath.Join(t.TempDir(), "approval.token"), noGit{})
+	if err := v.Verify(context.Background(), ".", false); err != nil {
+		t.Fatalf("default (no override, no gff) = %v, want off", err)
 	}
 }

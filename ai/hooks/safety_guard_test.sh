@@ -302,6 +302,15 @@ chmod +x "$GFF_STUB/gff"
   assert_exit 0 Bash "gss feature merged"  "approval off beats a gff on: feature merged runs" )
 ( export GSS_REQUIRE_APPROVAL=' ON ' PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
   assert_exit 2 Bash "gss push"            "GSS_REQUIRE_APPROVAL is trimmed and case-blind, as in gss" )
+( export GSS_REQUIRE_APPROVAL='o f f' PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash "gss push"            "only the ends are trimmed: 'o f f' is not off, gff on decides" )
+( export GSS_REQUIRE_APPROVAL=maybe PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash "gss push"            "an unrecognised override falls through to gff (on)" )
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=2
+  assert_exit 0 Bash "gss push"            "gff unknown key (exit 2) reads as off" )
+( export GSS_REQUIRE_APPROVAL=off
+  assert_exit 0 Bash "gss feature restack"        "approval off: feature restack runs"
+  assert_exit 0 Bash "gss feature pr --ready --merge" "approval off: feature pr --ready runs" )
 # No gff on PATH at all: off. PATH keeps every directory except those that
 # hold a gff binary.
 NOGFF_PATH=""
