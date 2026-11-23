@@ -244,10 +244,10 @@ gss_token_required() {
     esac
     command -v gff >/dev/null 2>&1 && gff enabled gss.approval-token.enabled >/dev/null 2>&1
 }
-if gss_token_required && { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
+if { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
    || [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
    || { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+pr([[:space:]]|$) ]] \
-        && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; }; then
+        && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; } && gss_token_required; then
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
         deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."

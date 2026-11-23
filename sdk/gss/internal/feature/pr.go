@@ -30,8 +30,8 @@ type ReadyOpts struct {
 
 // PromoteReady promotes a worker's draft PR to ready-for-review (design.md
 // → "gss feature pr --ready"; resolution #11). Promotion is the trust
-// boundary, so it is ALWAYS gated on a valid approval token — a missing or
-// invalid token returns errors.ErrPRReadyNeedsToken and never promotes.
+// boundary, so it is gated on a valid approval token whenever the token is
+// on (approval.TokenRequired; off by default) — a missing or invalid token returns errors.ErrPRReadyNeedsToken and never promotes.
 // By default it also refuses to promote a non-bottom PR while its parent is
 // still draft (merge bottom-up); --force overrides only that guard, never
 // the token gate.
@@ -53,7 +53,8 @@ func (s *Service) PromoteReady(ctx context.Context, opts ReadyOpts) error {
 		return fmt.Errorf("feature pr --ready: %s has no PR to promote", ref.String())
 	}
 
-	// 1. Approval gate — always required (never bypassed, even with --force).
+	// 1. Approval gate — never bypassed by --force; the verifier itself skips
+	// the token when gss.approval-token.enabled is off (the default).
 	if s.Approval == nil {
 		return fmt.Errorf("%w: no approval verifier configured", errors.ErrPRReadyNeedsToken)
 	}

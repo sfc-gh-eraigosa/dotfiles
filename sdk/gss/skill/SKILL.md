@@ -48,6 +48,9 @@ This skill provides a structured and safe workflow for managing Git repositories
 > the gated verbs below run directly: no token, no handshake. Everything else
 > stays: reviews, CI, the privacy hooks and the hooksPath check. The rest of
 > this section applies when the flag is on.
+> Turning it on from outside the dotfiles checkout needs the new key in gff's
+> registered snapshot: run `./install.sh` (it re-runs `gff install`) after
+> pulling, then `gff set gss.approval-token.enabled true`.
 
 The approval token is the **human's** signature on one exact commit. gss
 checks it against `HEAD` and consumes it. **An assistant never writes
