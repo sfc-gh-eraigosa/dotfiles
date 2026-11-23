@@ -234,10 +234,20 @@ fi
 # publish. Covers classic push/pr/sync AND the publish-class feature verbs:
 # `feature pr --ready` (promote draft→ready), `feature merged` (re-target +
 # auto-promote children), `feature restack` (force-push + retarget).
-if [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
+# Off by default (operator, 2026-11-23): only when the gff flag
+# gss.approval-token.enabled is on, or GSS_REQUIRE_APPROVAL=on, is the token
+# required. gss itself reads the same switch (sdk/gss/internal/approval).
+gss_token_required() {
+    case "$(printf '%s' "${GSS_REQUIRE_APPROVAL:-}" | tr '[:upper:]' '[:lower:]')" in
+        on|true|1) return 0 ;;
+        off|false|0) return 1 ;;
+    esac
+    command -v gff >/dev/null 2>&1 && gff enabled gss.approval-token.enabled >/dev/null 2>&1
+}
+if gss_token_required && { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
    || [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
    || { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+pr([[:space:]]|$) ]] \
-        && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; then
+        && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; }; then
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
         deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."

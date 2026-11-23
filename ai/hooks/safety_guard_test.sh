@@ -54,6 +54,10 @@ assert_json_match() {
     fi
 }
 
+# The approval cases below exercise the gate itself, so it is switched on for
+# them whatever this host's gff flag says; the switch has its own section.
+export GSS_REQUIRE_APPROVAL=on
+
 # === Allowed (exit 0) ===
 assert_exit 0 Bash "ls -la"                          "plain ls"
 assert_exit 0 run_shell_command "ls -la"             "plain ls (shared dialect)"
@@ -283,6 +287,24 @@ rm -f "$HOME/.config/gss/approval.token"
 assert_exit 2 Bash "cd $REPO_ROOT && gss feature checkpoint" "checkpoint without --worker outside a worktree"
 assert_exit 0 Bash "gss feature checkpoint --worker auth/erai/api"   "checkpoint --worker is fine anywhere"
 assert_exit 0 Bash "cd $WT_PROBE && gss feature checkpoint"          "bare checkpoint inside a worker worktree"
+
+# === the approval switch (operator 2026-11-23: off by default) ===
+# GSS_REQUIRE_APPROVAL decides when set; otherwise `gff enabled
+# gss.approval-token.enabled`, and no gff or an unknown flag means off.
+rm -f "$HOME/.config/gss/approval.token"
+GFF_STUB="$(mktemp -d "${TMPDIR:-/tmp}/sg-gff.XXXXXX")"
+printf '#!/bin/sh\nexit ${GFF_STUB_RC:-1}\n' > "$GFF_STUB/gff"
+chmod +x "$GFF_STUB/gff"
+( export GSS_REQUIRE_APPROVAL=off
+  assert_exit 0 Bash "gss push"            "approval off: gss push runs with no approval file"
+  assert_exit 0 Bash "gss feature merged"  "approval off: feature merged runs with no approval file" )
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash "gss push"            "gff flag on: gss push with no approval file is blocked" )
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
+  assert_exit 0 Bash "gss push"            "gff flag off (the default): gss push runs" )
+( export GSS_REQUIRE_APPROVAL=on PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
+  assert_exit 2 Bash "gss push"            "GSS_REQUIRE_APPROVAL=on beats a gff off" )
+rm -rf "$GFF_STUB"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"
