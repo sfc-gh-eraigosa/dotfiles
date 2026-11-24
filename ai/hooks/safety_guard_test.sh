@@ -383,6 +383,8 @@ done
   assert_exit 2 Bash 'gss push>/dev/null'                  'gss push>/dev/null is gated'
   assert_exit 2 Bash 'gss sync</dev/null'                  'gss sync</dev/null is gated'
   assert_exit 2 Bash 'gss feature pr --ready>/dev/null'    'feature pr --ready>/dev/null is gated'
+  assert_exit 2 Bash "\$'gss' push"                        "\$'gss' push is gated"
+  assert_exit 2 Bash '$"gss" push'                         '$"gss" push is gated'
   assert_exit 0 Bash 'gss pushd'                           'a longer word is not the verb'
   assert_exit 0 Bash 'gss feature pr --readyx'             '--readyx is not --ready'
   assert_exit 0 Bash 'cd ../gss && ls'                     'cd into ../gss is not a gss command' )
@@ -484,6 +486,31 @@ assert_exit 0 Bash 'git commit -m "refuse cp -f into ~/.config/gff"'   "a messag
 assert_exit 0 Bash 'git commit -m "safety_guard: refuse > ~/.config/gff/config.yaml"' "a quoted > before a gff path is fine"
 assert_exit 0 Bash 'tail -f ~/.config/gff/config.yaml'                 "tail -f of it is fine"
 assert_exit 2 Bash "yq --in-place '.a = 1' ~/.config/gff/config.yaml"  "yq --in-place on it is refused"
+# agy review of dd1f58a7: shell keywords, $'' quoting, escapes, comments
+assert_exit 2 Bash "{ gff set gss.approval-token.enabled false; }"     "gff set in a brace group is refused"
+assert_exit 2 Bash "if true; then gff set gss.approval-token.enabled false; fi" "gff set after then is refused"
+assert_exit 2 Bash "time gff set gss.approval-token.enabled false"     "gff set behind time is refused"
+assert_exit 2 Bash "! gff unset gss.approval-token.enabled"            "gff unset behind ! is refused"
+assert_exit 2 Bash "2>/dev/null gff set gss.approval-token.enabled false" "gff set behind a redirect is refused"
+assert_exit 2 Bash '\gff set gss.approval-token.enabled false'         'backslashed \gff set is refused'
+assert_exit 2 Bash "gff s\\et gss.approval-token.enabled false"        "a backslash inside set is refused"
+assert_exit 2 Bash "rm ~/.config/\\gff/config.yaml"                    "a backslash in the gff path is refused"
+assert_exit 2 Bash "rm ~/.config/'.'/gff/config.yaml"                  "a quoted . in the path is refused"
+assert_exit 2 Bash 'rm ~/.config/""/gff/config.yaml'                   'an empty quoted segment in the path is refused'
+assert_exit 2 Bash "rm ~/.config/\$'gff'/config.yaml"                  "a \$'gff' path segment is refused"
+assert_exit 2 Bash "\$'gff' set gss.approval-token.enabled false"      "\$'gff' set is refused"
+assert_exit 2 Bash $'echo ok # "\nrm ~/.config/gff/config.yaml'        "a quote in a comment does not hide the next line"
+assert_exit 2 Bash "yq -iy '.a = 1' ~/.config/gff/config.yaml"         "yq -iy on it is refused"
+assert_exit 2 Bash "GIT_CONFIG_GLOBAL=~/.config/gff/config.yaml git config --global a.b c" "an env var naming a gff path is refused"
+assert_exit 2 Bash "git bundle create ~/.config/gff/config.yaml HEAD"  "git bundle create onto it is refused"
+assert_exit 0 Bash 'git commit -m "gss: see #472; the override is ~/.config/gff/config.yaml"' "a message with #472 and ; is fine"
+assert_exit 0 Bash "if test -f ~/.config/gff/config.yaml; then cat ~/.config/gff/config.yaml; fi" "testing for it in an if is fine"
+assert_exit 0 Bash "ls ~/.config/gff # list it"                        "a trailing comment is fine"
+# Claude review of dd1f58a7
+assert_exit 2 Bash $'# operator\'s flag\ngff unset gss.approval-token.enabled' "an apostrophe in a comment does not hide the next line"
+assert_exit 2 Bash "bash -c 'gff set gss.approval-token.enabled false'" "gff set inside bash -c is refused"
+assert_exit 2 Bash "doas gff set gss.approval-token.enabled false"     "gff set behind doas is refused"
+assert_exit 0 Bash "jq . < ~/.config/gff/config.yaml"                  "jq reading it on stdin is fine"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"

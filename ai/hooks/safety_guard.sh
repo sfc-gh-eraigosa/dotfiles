@@ -256,7 +256,9 @@ gss_token_required() {
 # path to the binary counts ($HOME/opt/bin/gss, ~/gss). Bash runs all of them
 # as gss. The verb may start after ( or a backtick and end at ; | & ) or a
 # backtick, as in { gss push; } or $(gss push).
-CMD_GSS="${CMD_SCRUBBED//[\"\'\\]/}"
+# $'...' and $"..." are quotes too: their $ goes with them.
+CMD_GSS="${CMD_SCRUBBED//\$\'/\'}"; CMD_GSS="${CMD_GSS//\$\"/\"}"
+CMD_GSS="${CMD_GSS//[\"\'\\]/}"
 GSS_LEAD='(^|[[:space:];|&(`])'
 GSS_BIN='((/|~/|[$]HOME/|[$][{]HOME[}]/|[.][.]?/)([^[:space:];|&`]*/)?)?gss'
 GSS_END='([[:space:];|&)`<>]|$)'
@@ -290,11 +292,11 @@ fi
 # an assistant: refuse `gff [flags] set|unset` of the key, and anything but a
 # read of gff's state (~/.config/gff, the overrides; ~/.local/share/gff, the
 # registered snapshots). Reading the flag (gff get/enabled/list) stays free.
-# Each part of the command (split at ; | & ( ) < backticks and newlines) is
+# Each part of the command (split at ; | & ( ) backticks and newlines) is
 # checked on its own:
 # - a part whose command is gff (also behind sudo, env, command, exec, nohup,
-#   nice, timeout or xargs) may not set or unset the flag, whatever flags
-#   come first;
+#   nice, timeout, xargs, doas, or bash/sh/zsh -c) may not set or unset
+#   the flag, whatever flags come first;
 # - a part that names a gff dir must start with a read-only command, and
 #   nothing may redirect into a gff dir. That is an allowlist, not a list of
 #   writers: rm, mv, sed -i, chmod, unlink, cd-then-edit and anything not
@@ -309,7 +311,7 @@ fi
 # backslash is refused; pass it through a heredoc (-F - <<EOF), which is
 # never checked as code.
 GFF_DIRS='[.]config/gff|[.]local/share/gff'
-GFF_WRAPPERS='sudo|env|command|exec|nohup|nice|timeout|xargs'
+GFF_WRAPPERS='sudo|env|command|exec|nohup|nice|timeout|xargs|doas|bash|sh|zsh'
 # Paths are normalized first: a//b and a/./b name a/b.
 gff_norm() {
     local t="$1"
@@ -318,11 +320,11 @@ gff_norm() {
 }
 # The command's parts, one per line.
 gff_cmd_parts() {
-    local s out="" q="" c i
-    s="$(gff_norm "$CMD_SCRUBBED")"
-    if [ "${#s}" -gt 4000 ] || [[ "$s" == *\\* || "$s" == *\$\'* || "$s" == *\$\(* || "$s" == *\`* ]]; then
-        s="${s//[\"\']/}"
-        printf '%s\n' "${s//[;|&()<\`]/$'\n'}"
+    local s="$CMD_SCRUBBED" out="" q="" c i
+    if [ "${#s}" -gt 4000 ] || [[ "$s" == *\\* || "$s" == *\$[\'\"\(]* || "$s" == *\`* ]]; then
+        # strict: the quote-stripped command (as rule 10 sees it), split like code
+        s="$(gff_norm "$CMD_GSS")"
+        printf '%s\n' "${s//[;|&()\`]/$'\n'}"
         return
     fi
     for ((i = 0; i < ${#s}; i++)); do
@@ -330,7 +332,16 @@ gff_cmd_parts() {
         if [ -z "$q" ]; then
             case "$c" in
                 \"|\') q=$c ;;
-                ';'|'|'|'&'|'('|')'|'<') out+=$'\n' ;;
+                ';'|'|'|'&'|'('|')') out+=$'\n' ;;
+                '#')
+                    # a comment, as bash reads one: # starting a word runs to
+                    # the end of the line, quotes and all
+                    if [ "$i" -eq 0 ] || [[ "${s:i-1:1}" =~ [[:space:]\;\|\&\(] ]]; then
+                        while [ "$i" -lt "${#s}" ] && [ "${s:i:1}" != $'\n' ]; do i=$((i + 1)); done
+                        out+=$'\n'
+                    else
+                        out+=$c
+                    fi ;;
                 *) out+=$c ;;
             esac
         elif [ "$c" = "$q" ]; then
@@ -342,16 +353,27 @@ gff_cmd_parts() {
             esac
         fi
     done
-    printf '%s\n' "$out"
+    gff_norm "$out"; echo
 }
-# The part's command word (after VAR=x assignments), and its words.
 gff_guard() {
     local seg w words n
     [[ "$CMD_GSS" == *gff* ]] || return 1
     while IFS= read -r seg; do
         read -ra words <<< "$seg"
+        # the part's command word: past VAR=x assignments (one naming a gff
+        # dir is refused: GIT_CONFIG_GLOBAL=<gff path> git config ...),
+        # keywords ({ ! time if then do ...) and leading redirections
         n=0
-        while [ "$n" -lt "${#words[@]}" ] && [[ "${words[n]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do n=$((n + 1)); done
+        while [ "$n" -lt "${#words[@]}" ]; do
+            case "${words[n]}" in
+                '{'|'!'|time|if|then|else|elif|do|while|until) ;;
+                [0-9]*'>'*|'>'*) ;;
+                *)
+                    [[ "${words[n]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || break
+                    [[ "${words[n]}" =~ $GFF_DIRS ]] && return 0 ;;
+            esac
+            n=$((n + 1))
+        done
         w="${words[n]:-}"; w="${w##*/}"
         # gff [flags] set|unset gss.approval-token...
         if [ "$w" = gff ] || { [[ "$w" =~ ^($GFF_WRAPPERS)$ ]] && [[ "$seg" =~ (^|[[:space:]/])gff[[:space:]] ]]; }; then
@@ -364,8 +386,12 @@ gff_guard() {
             # readers that can also write: refused when a write flag takes a
             # gff path, attached or not (git config -f<path>, git diff
             # --output=, git archive -o, tree -o), and yq with -i at all
-            git|tree) [[ "$seg" =~ [[:space:]](-[A-Za-z]*[fo]|--file|--output)(=|[[:space:]]*)[^[:space:]]*($GFF_DIRS) ]] && return 0 ;;
-            yq) [[ "$seg" =~ [[:space:]](-[A-Za-z]*i|--inplace|--in-place)([[:space:]]|=|$) ]] && return 0 ;;
+            # --output=, git archive -o, tree -o), git subcommands that write
+            # a named file (config, bundle, archive), and yq with -i at all
+            git|tree)
+                [[ "$seg" =~ [[:space:]](-[A-Za-z]*[fo]|--file|--output)(=|[[:space:]]*)[^[:space:]]*($GFF_DIRS) ]] && return 0
+                [[ "$w" = git && "${words[n+1]:-}" =~ ^(config|bundle|archive)$ ]] && return 0 ;;
+            yq) [[ "$seg" =~ [[:space:]](-[A-Za-z]*i[A-Za-z]*|--inplace|--in-place)([[:space:]]|=|$) ]] && return 0 ;;
             *) return 0 ;;
         esac
     done < <(gff_cmd_parts)
