@@ -72,6 +72,22 @@ assert_in_subshell "keeps a link already inside the current nvm prefix" \
 assert_in_subshell "keeps a stale nvm link when no canonical is confirmed" \
     "$mk_nvm ln -s \"\$old\" \"\$H/.local/bin/claude\"; export CLAUDE_CANONICAL_BIN=\"\$H/nope/claude\"; . '$SCRIPT'; cleanup_conflicting_installs >/dev/null 2>&1; [ \"\$(readlink \"\$H/.local/bin/claude\")\" = \"\$old\" ]"
 
+# 5e) Downgrade guard: link into a NEWER node than the canonical => untouched.
+assert_in_subshell "never re-points a link to an older node than its target" \
+    "$mk_nvm ln -s \"\$new\" \"\$H/.local/bin/claude\"; export CLAUDE_CANONICAL_BIN=\"\$old\"; . '$SCRIPT'; cleanup_conflicting_installs >/dev/null 2>&1; [ \"\$(readlink \"\$H/.local/bin/claude\")\" = \"\$new\" ]"
+
+# 5f) A custom NVM_DIR (not ~/.nvm) is recognized too.
+assert_in_subshell "re-points a stale link under a custom NVM_DIR" \
+    "H=\$(mktemp -d); export HOME=\"\$H\"; N=\"\$H/.config/nvm\"; mkdir -p \"\$H/.local/bin\" \"\$N/versions/node/v1.0.0/bin\" \"\$N/versions/node/v2.0.0/bin\"; o=\"\$N/versions/node/v1.0.0/bin/claude\"; n=\"\$N/versions/node/v2.0.0/bin/claude\"; : > \"\$o\"; : > \"\$n\"; chmod +x \"\$o\" \"\$n\"; ln -s \"\$o\" \"\$H/.local/bin/claude\"; export CLAUDE_CANONICAL_BIN=\"\$n\"; . '$SCRIPT'; cleanup_conflicting_installs >/dev/null 2>&1; [ \"\$(readlink \"\$H/.local/bin/claude\")\" = \"\$n\" ]"
+
+# 5g) A RELATIVE link into the current node is not treated as stale.
+assert_in_subshell "keeps a relative link into the current nvm node" \
+    "$mk_nvm ln -s ../../.nvm/versions/node/v2.0.0/bin/claude \"\$H/.local/bin/claude\"; export CLAUDE_CANONICAL_BIN=\"\$new\"; . '$SCRIPT'; cleanup_conflicting_installs >/dev/null 2>&1; [ \"\$(readlink \"\$H/.local/bin/claude\")\" = ../../.nvm/versions/node/v2.0.0/bin/claude ]"
+
+# 5h) version_lt compares numerically per field (10 > 9); equal is not lower.
+assert_in_subshell "version_lt compares dotted versions numerically" \
+    ". '$SCRIPT'; version_lt 24.9.0 24.10.0 && ! version_lt 24.10.0 24.9.0 && ! version_lt 24.18.0 24.18.0"
+
 # 6) resolve_canonical_claude honors the override.
 assert_in_subshell "resolve_canonical_claude honors CLAUDE_CANONICAL_BIN" \
     "export CLAUDE_CANONICAL_BIN=/opt/x/claude; . '$SCRIPT'; [ \"\$(resolve_canonical_claude)\" = /opt/x/claude ]"
