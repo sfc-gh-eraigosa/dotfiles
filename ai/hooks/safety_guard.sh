@@ -251,6 +251,12 @@ if { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
    || [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
    || { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+pr([[:space:]]|$) ]] \
         && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; } && gss_token_required; then
+    # The override belongs to the operator's shell, not to the command: a
+    # gated command that sets it would turn the check off inside gss while
+    # this hook only sees that some token file exists.
+    if [[ "$CMD_SCRUBBED" =~ GSS_REQUIRE_APPROVAL[[:space:]]*= ]]; then
+        deny "The approval token is required here, and this gss command sets GSS_REQUIRE_APPROVAL itself. Only the operator turns the check off (gff set gss.approval-token.enabled false, or GSS_REQUIRE_APPROVAL=off in their own shell)."
+    fi
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
         deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."

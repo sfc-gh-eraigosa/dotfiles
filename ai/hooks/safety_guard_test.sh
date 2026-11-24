@@ -311,20 +311,36 @@ chmod +x "$GFF_STUB/gff"
 ( export GSS_REQUIRE_APPROVAL=off
   assert_exit 0 Bash "gss feature restack"        "approval off: feature restack runs"
   assert_exit 0 Bash "gss feature pr --ready --merge" "approval off: feature pr --ready runs" )
-# No gff on PATH at all: off. PATH keeps every directory except those that
-# hold a gff binary.
-NOGFF_PATH=""
+# No gff on PATH at all: off. A directory that holds gff is replaced by a
+# mirror of its other entries, so jq, git and the rest stay reachable on any
+# host layout.
+NOGFF_PATH=""; NOGFF_DIRS=()
 IFS=: read -ra _dirs <<< "$PATH"
-for _d in "${_dirs[@]}"; do [ -x "$_d/gff" ] || NOGFF_PATH="${NOGFF_PATH:+$NOGFF_PATH:}$_d"; done
-# jq builds the payload and the hook needs git: when either lives beside gff
-# the case would test an empty payload, so it is recorded as a failure.
-if PATH="$NOGFF_PATH" command -v jq >/dev/null 2>&1 && PATH="$NOGFF_PATH" command -v git >/dev/null 2>&1; then
-  ( unset GSS_REQUIRE_APPROVAL; export PATH="$NOGFF_PATH"
-    assert_exit 0 Bash "gss push"            "no gff installed: gss push runs (off)" )
-else
-  echo "FAIL: no gff installed: jq or git shares a directory with gff, so this case cannot run here"
-  echo FAIL >> "$RESULTS"
-fi
+for _d in "${_dirs[@]}"; do
+  if [ -x "$_d/gff" ]; then
+    _m=$(mktemp -d "${TMPDIR:-/tmp}/sg-nogff.XXXXXX"); NOGFF_DIRS+=("$_m")
+    for _f in "$_d"/*; do [ "$(basename "$_f")" = gff ] || ln -s "$_f" "$_m/"; done
+    _d=$_m
+  fi
+  NOGFF_PATH="${NOGFF_PATH:+$NOGFF_PATH:}$_d"
+done
+( unset GSS_REQUIRE_APPROVAL; export PATH="$NOGFF_PATH"
+  if command -v gff >/dev/null 2>&1; then
+    echo "FAIL: no gff installed: gff is still on PATH"; echo FAIL >> "$RESULTS"
+  else
+    assert_exit 0 Bash "gss push"            "no gff installed: gss push runs (off)"
+  fi )
+[ ${#NOGFF_DIRS[@]} -eq 0 ] || rm -rf "${NOGFF_DIRS[@]}"
+# The override is the operator's: while the token is required, a gated
+# command that sets it is blocked even with a token that matches HEAD.
+OVR_HOME="$(mktemp -d "${TMPDIR:-/tmp}/sg-home.XXXXXX")"
+mkdir -p "$OVR_HOME/.config/gss"; git -C "$REPO_ROOT" rev-parse HEAD > "$OVR_HOME/.config/gss/approval.token"
+( unset GSS_REQUIRE_APPROVAL; export HOME="$OVR_HOME" PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash "GSS_REQUIRE_APPROVAL=off gss push" "flag on: a command that sets the override is blocked"
+  assert_exit 2 Bash "export GSS_REQUIRE_APPROVAL=0; gss feature pr --ready" "flag on: an override exported in the command is blocked" )
+( unset GSS_REQUIRE_APPROVAL; export HOME="$OVR_HOME" PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
+  assert_exit 0 Bash "GSS_REQUIRE_APPROVAL=off gss push" "flag off: an override in the command changes nothing" )
+rm -rf "$OVR_HOME"
 ( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
   assert_exit 2 Bash "gss push"            "gff flag on: gss push with no approval file is blocked" )
 ( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
