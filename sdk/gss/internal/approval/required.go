@@ -3,6 +3,8 @@ package approval
 import (
 	"os"
 	"os/exec"
+	"os/user"
+	"path/filepath"
 	"strings"
 )
 
@@ -18,11 +20,61 @@ const FlagKey = "gss.approval-token.enabled"
 // the check off while the operator has it on.
 const EnvOverride = "GSS_REQUIRE_APPROVAL"
 
-// lookPath and runGFF are swapped in tests.
+// gff is asked with an environment of its own (#472): the user's home from
+// the password database and a fixed PATH, nothing inherited. A command that
+// sets PATH, HOME or XDG_* for gss cannot make gff fail, which would read as
+// off.
+//
+// lookPath, runGFF and userHome are swapped in tests.
 var (
-	lookPath = exec.LookPath
-	runGFF   = func(args ...string) error { return exec.Command("gff", args...).Run() }
+	lookPath = cleanLookPath
+	runGFF   = func(args ...string) error {
+		p, err := cleanLookPath("gff")
+		if err != nil {
+			return err
+		}
+		cmd := exec.Command(p, args...)
+		cmd.Env = gffEnv()
+		return cmd.Run()
+	}
+	userHome = func() string {
+		if u, err := user.Current(); err == nil {
+			return u.HomeDir
+		}
+		return ""
+	}
 )
+
+// gffPATH is where gff is looked for: the install dirs under the user's
+// home, then the system dirs.
+func gffPATH() string {
+	var dirs []string
+	if h := userHome(); h != "" {
+		dirs = append(dirs, filepath.Join(h, "opt", "bin"), filepath.Join(h, ".local", "bin"), filepath.Join(h, "go", "bin"))
+	}
+	dirs = append(dirs, "/usr/local/bin", "/usr/bin", "/bin")
+	return strings.Join(dirs, string(os.PathListSeparator))
+}
+
+// gffEnv is the whole environment gff runs with.
+func gffEnv() []string {
+	env := []string{"PATH=" + gffPATH()}
+	if h := userHome(); h != "" {
+		env = append(env, "HOME="+h)
+	}
+	return env
+}
+
+// cleanLookPath finds an executable on gffPATH, never on $PATH.
+func cleanLookPath(name string) (string, error) {
+	for _, d := range filepath.SplitList(gffPATH()) {
+		p := filepath.Join(d, name)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return p, nil
+		}
+	}
+	return "", exec.ErrNotFound
+}
 
 // TokenRequired reports whether gated verbs need an approval token: on when
 // the env override says on, else `gff enabled gss.approval-token.enabled` (exit
