@@ -287,29 +287,62 @@ fi
 
 # --- 10b. the approval flag is the operator's (#472) ---
 # Like the token, gss.approval-token.enabled is set by the operator, never by
-# an assistant: refuse `gff set|unset` of the key, and anything but a read of
-# ~/.config/gff. Reading the flag (gff get/enabled/list) stays free.
+# an assistant: refuse `gff [flags] set|unset` of the key, and anything but a
+# read of gff's state (~/.config/gff, the overrides; ~/.local/share/gff, the
+# registered snapshots). Reading the flag (gff get/enabled/list) stays free.
 # The directory check is an allowlist, not a list of writers: each part of
-# the command (split at ; | & ( ) and backticks) that names .config/gff must
-# start with a read-only command, and nothing may redirect into it. So rm,
-# mv, sed -i, chmod, unlink, cd-then-edit and anything not listed are all
-# refused. It catches mistakes and the plain spellings; it is a text match,
-# so xargs, a variable holding the path, or the Write/Edit tools get past it.
-GFF_FLAG_WRITE='(^|[[:space:];|&(/`])gff[[:space:]]+(set|unset)[[:space:]][^;|&]*gss[.]approval-token'
+# the command (split at ; | & ( ) backticks and newlines, outside quotes)
+# that names a gff dir must start with a read-only command, and nothing may
+# redirect into it. So rm, mv, sed -i, chmod, unlink, cd-then-edit and
+# anything not listed are all refused, while a commit message or PR body that
+# only mentions the path passes. It catches mistakes and the plain spellings;
+# it is a text match, so xargs, a variable holding the path, removing a
+# parent dir, or the Write/Edit tools get past it.
+GFF_FLAG_WRITE='(^|[[:space:];|&(/`])gff[[:space:]]([^;|&]*[[:space:]])?(set|unset)[[:space:]][^;|&]*gss[.]approval-token'
+GFF_DIRS='[.]config/gff|[.]local/share/gff'
+# The command with quotes dropped and separators inside quotes made spaces,
+# so quoted text stays one part; $( and backticks inside double quotes still
+# run, so they break the part there.
+gff_cmd_parts() {
+    local s="$CMD_SCRUBBED" out="" q="" c i
+    for ((i = 0; i < ${#s}; i++)); do
+        c="${s:i:1}"
+        if [ -z "$q" ]; then
+            case "$c" in
+                \"|\') q=$c ;;
+                \\) ;;
+                ';'|'|'|'&'|'('|')'|'`') out+=$'\n' ;;
+                *) out+=$c ;;
+            esac
+        elif [ "$c" = "$q" ]; then
+            q=""
+        elif [ "$q" = '"' ] && { [ "$c" = '`' ] || [ "${s:i:2}" = '$(' ]; }; then
+            out+=$'\n'
+        else
+            case "$c" in
+                ';'|'|'|'&'|'('|')'|'`'|$'\n') out+=' ' ;;
+                *) out+=$c ;;
+            esac
+        fi
+    done
+    printf '%s\n' "$out"
+}
 gff_dir_written() {
     local seg w words
-    local split="${CMD_GSS//[;|&()\`]/$'\n'}"
+    [[ "$CMD_GSS" =~ $GFF_DIRS ]] || return 1
     while IFS= read -r seg; do
-        [[ "$seg" =~ [.]config/gff ]] || continue
-        [[ "$seg" =~ \>[[:space:]]*[^[:space:]]*[.]config/gff ]] && return 0
+        [[ "$seg" =~ $GFF_DIRS ]] || continue
+        [[ "$seg" =~ \>[[:space:]]*[^[:space:]]*($GFF_DIRS) ]] && return 0
         read -ra words <<< "$seg"
         w=""
         for w in "${words[@]}"; do [[ "$w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || break; done
         case "${w##*/}" in
-            cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|yq|ls|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|echo|printf|gff|git|gh) ;;
+            cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|yq|ls|tree|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|echo|printf|gff|gh) ;;
+            # git only for text that mentions the path (a commit message), never git config --file
+            git) [[ "$seg" =~ [[:space:]](--file|-f)([[:space:]]|=) ]] && return 0 ;;
             *) return 0 ;;
         esac
-    done <<< "$split"
+    done < <(gff_cmd_parts)
     return 1
 }
 if [[ "$CMD_GSS" =~ $GFF_FLAG_WRITE ]] || gff_dir_written; then

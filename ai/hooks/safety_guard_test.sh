@@ -439,6 +439,20 @@ assert_exit 0 Bash "cat ~/.config/gff/config.yaml > /tmp/bak"           "saving 
 assert_exit 0 Bash "grep x ~/.config/gff/config.yaml; rm -f /tmp/x"     "a read, then an rm of another file, is fine"
 assert_exit 0 Bash "ls -la ~/.config/gff/ | head"                       "listing the dir is fine"
 assert_exit 0 Bash "jq . < /dev/null; yq . ~/.config/gff/config.yaml"   "yq of it is fine"
+# second review of #473: quoted text is one part, flags before set, snapshots
+assert_exit 0 Bash "git commit -m \"gss: notes
+
+The user override lives in ~/.config/gff/config.yaml; rm is refused (see #472).\"" "a multi-line commit message that mentions the path is fine"
+assert_exit 0 Bash "git commit -m 'the override (~/.config/gff/config.yaml) is the operator'\\''s'" "a single-quoted message with ( and ' is fine"
+assert_exit 0 Bash "gh pr comment 1 --body \"cp of ~/.config/gff/config.yaml is refused; use cat\"" "a PR comment that mentions the path is fine"
+assert_exit 0 Bash "tree ~/.config/gff"                                 "tree of the gff dir is fine"
+assert_exit 2 Bash "gff --source x set gss.approval-token.enabled false" "gff with a flag before set is refused"
+assert_exit 2 Bash "gff --source=x unset gss.approval-token.enabled"    "gff --source= before unset is refused"
+assert_exit 2 Bash "git config --file ~/.config/gff/config.yaml a.b c"  "git config --file on it is refused"
+assert_exit 2 Bash "rm -rf ~/.local/share/gff"                          "removing gff's snapshots is refused"
+assert_exit 2 Bash "echo \"\$(rm ~/.config/gff/config.yaml)\""          "rm inside \$( ) inside double quotes is refused"
+assert_exit 2 Bash "echo \"\`rm ~/.config/gff/config.yaml\`\""          "rm in backticks inside double quotes is refused"
+assert_exit 2 Bash "echo 'x'; rm ~/.config/gff/config.yaml"             "rm after a quoted echo is refused"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"
