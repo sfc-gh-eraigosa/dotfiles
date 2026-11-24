@@ -24,7 +24,8 @@ ready-for-merge so the Mergify queue lands it — the one gss step for "ship
 it"; never add that label with gh pr edit. On a PR that is already ready,
 --ready --merge only adds the label.
 
-Always gated on the approval token (refused without it). The token is the
+Gated on the approval token when the gff flag gss.approval-token.enabled
+is on (off by default; GSS_REQUIRE_APPROVAL=on turns it on for one run; only the flag turns it off). The token is the
 HUMAN's approval: the person runs
   git rev-parse HEAD > ~/.config/gss/approval.token
 and an assistant never writes it. By default gss refuses to promote a

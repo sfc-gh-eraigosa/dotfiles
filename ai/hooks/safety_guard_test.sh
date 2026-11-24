@@ -16,7 +16,8 @@ HOOK="$REPO_ROOT/ai/hooks/safety_guard.sh"
 # incremented there never reaches the summary — a failing case would have gone
 # unreported and the driver would still exit 0.
 RESULTS="$(mktemp "${TMPDIR:-/tmp}/sg-results.XXXXXX")"
-trap 'rm -f "$RESULTS"' EXIT
+SG_TMP=()   # temp dirs the switch cases make; removed even if a run is killed
+trap 'rm -rf "$RESULTS" ${SG_TMP[@]+"${SG_TMP[@]}"}' EXIT
 
 # usage: assert_exit <expected_code> <tool> <command> <label>
 assert_exit() {
@@ -53,6 +54,10 @@ assert_json_match() {
         echo FAIL >> "$RESULTS"
     fi
 }
+
+# The approval cases below exercise the gate itself, so it is switched on for
+# them whatever this host's gff flag says; the switch has its own section.
+export GSS_REQUIRE_APPROVAL=on
 
 # === Allowed (exit 0) ===
 assert_exit 0 Bash "ls -la"                          "plain ls"
@@ -283,6 +288,62 @@ rm -f "$HOME/.config/gss/approval.token"
 assert_exit 2 Bash "cd $REPO_ROOT && gss feature checkpoint" "checkpoint without --worker outside a worktree"
 assert_exit 0 Bash "gss feature checkpoint --worker auth/erai/api"   "checkpoint --worker is fine anywhere"
 assert_exit 0 Bash "cd $WT_PROBE && gss feature checkpoint"          "bare checkpoint inside a worker worktree"
+
+# === the approval switch (operator 2026-11-23: off by default) ===
+# GSS_REQUIRE_APPROVAL=on turns the check on; otherwise `gff enabled
+# gss.approval-token.enabled`, and no gff or an unknown flag means off.
+rm -f "$HOME/.config/gss/approval.token"
+GFF_STUB="$(mktemp -d "${TMPDIR:-/tmp}/sg-gff.XXXXXX")"
+# The stub answers only the exact question the hook must ask; any other
+# arguments exit 2 (gff's "unknown key"), which reads as off.
+printf '#!/bin/sh\n[ "$*" = "enabled gss.approval-token.enabled" ] || exit 2\nexit ${GFF_STUB_RC:-1}\n' > "$GFF_STUB/gff"
+chmod +x "$GFF_STUB/gff"
+SG_TMP+=("$GFF_STUB")
+# The variable only turns the check on: off, false or 0 cannot turn a gff on
+# off, so no command line can switch the check off.
+( export GSS_REQUIRE_APPROVAL=off PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash "gss push"            "GSS_REQUIRE_APPROVAL=off cannot turn a gff on off: gss push blocked"
+  assert_exit 2 Bash "gss feature merged"  "GSS_REQUIRE_APPROVAL=off cannot turn a gff on off: feature merged blocked" )
+( export GSS_REQUIRE_APPROVAL=0 PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash "gss push"            "GSS_REQUIRE_APPROVAL=0 cannot either" )
+( export GSS_REQUIRE_APPROVAL=' ON ' PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
+  assert_exit 2 Bash "gss push"            "GSS_REQUIRE_APPROVAL is trimmed and case-blind, as in gss" )
+( export GSS_REQUIRE_APPROVAL='o f f' PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash "gss push"            "only the ends are trimmed: 'o f f' is not off, gff on decides" )
+( export GSS_REQUIRE_APPROVAL=maybe PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash "gss push"            "an unrecognised override falls through to gff (on)" )
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=2
+  assert_exit 0 Bash "gss push"            "gff unknown key (exit 2) reads as off" )
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
+  assert_exit 0 Bash "gss feature restack"        "approval off: feature restack runs"
+  assert_exit 0 Bash "gss feature pr --ready --merge" "approval off: feature pr --ready runs" )
+# No gff on PATH at all: off. A directory that holds gff is replaced by a
+# mirror of its other entries, so jq, git and the rest stay reachable on any
+# host layout.
+NOGFF_PATH=""; NOGFF_DIRS=()
+IFS=: read -ra _dirs <<< "$PATH"
+for _d in "${_dirs[@]}"; do
+  if [ -x "$_d/gff" ]; then
+    _m=$(mktemp -d "${TMPDIR:-/tmp}/sg-nogff.XXXXXX"); NOGFF_DIRS+=("$_m"); SG_TMP+=("$_m")
+    for _f in "$_d"/*; do [ -e "$_f" ] && [ "$(basename "$_f")" != gff ] && ln -s "$_f" "$_m/"; done
+    _d=$_m
+  fi
+  NOGFF_PATH="${NOGFF_PATH:+$NOGFF_PATH:}$_d"
+done
+( unset GSS_REQUIRE_APPROVAL; export PATH="$NOGFF_PATH"
+  if command -v gff >/dev/null 2>&1; then
+    echo "FAIL: no gff installed: gff is still on PATH"; echo FAIL >> "$RESULTS"
+  else
+    assert_exit 0 Bash "gss push"            "no gff installed: gss push runs (off)"
+  fi )
+[ ${#NOGFF_DIRS[@]} -eq 0 ] || rm -rf "${NOGFF_DIRS[@]}"
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash "gss push"            "gff flag on: gss push with no approval file is blocked" )
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
+  assert_exit 0 Bash "gss push"            "gff flag off (the default): gss push runs" )
+( export GSS_REQUIRE_APPROVAL=on PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
+  assert_exit 2 Bash "gss push"            "GSS_REQUIRE_APPROVAL=on beats a gff off" )
+rm -rf "$GFF_STUB"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"

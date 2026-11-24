@@ -42,6 +42,16 @@ This skill provides a structured and safe workflow for managing Git repositories
 
 ### The approval handshake
 
+> **Off by default since 2026-11-23.** The token is required only when the gff
+> flag `gss.approval-token.enabled` is on (`gff get gss.approval-token.enabled`;
+> `GSS_REQUIRE_APPROVAL=on` turns it on for one process; only the flag turns it off). While it is off,
+> the gated verbs below run directly: no token, no handshake. Everything else
+> stays: reviews, CI, the privacy hooks and the hooksPath check. The rest of
+> this section applies when the flag is on.
+> Turning it on from outside the dotfiles checkout needs the new key in gff's
+> registered snapshot: run `./install.sh` (it re-runs `gff install`) after
+> pulling, then `gff set gss.approval-token.enabled true`.
+
 The approval token is the **human's** signature on one exact commit. gss
 checks it against `HEAD` and consumes it. **An assistant never writes
 `~/.config/gss/approval.token`** — not with `>`, `tee`, `cp`, a script, or a

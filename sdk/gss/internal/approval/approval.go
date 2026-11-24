@@ -8,7 +8,8 @@
 // the current HEAD, and consumes (deletes) it on success — so a token is
 // single-use and can't be replayed against a later commit. This reproduces
 // the semantics of the classic cmd/push.go handshake; the --force-autonomous
-// path bypasses the check entirely.
+// path bypasses the check entirely, and so does the gff flag
+// gss.approval-token.enabled when it is off (the default; see TokenRequired).
 package approval
 
 import (
@@ -57,6 +58,9 @@ func (e *Error) Unwrap() error { return e.Err }
 
 // Verifier checks (and issues) HEAD-bound approval tokens.
 type Verifier struct {
+	// Required says whether the token is checked at all (TokenRequired by
+	// default; tests inject their own). nil means required.
+	Required func() bool
 	// Path is the token file location (e.g. <state_dir>/approval.token).
 	Path string
 	// Git reads HEAD; injected for testability.
@@ -65,17 +69,17 @@ type Verifier struct {
 
 // NewVerifier wires the token path and git runner.
 func NewVerifier(path string, gitr git.Runner) *Verifier {
-	return &Verifier{Path: path, Git: gitr}
+	return &Verifier{Path: path, Git: gitr, Required: TokenRequired}
 }
 
 // Verify enforces the handshake for the repo at repoPath. When
-// forceAutonomous is true the check is skipped entirely (no token is read
-// or consumed). Otherwise the token must exist and equal the current HEAD;
+// forceAutonomous is true, or Required says the token is off, the check is
+// skipped entirely (no token is read or consumed). Otherwise the token must exist and equal the current HEAD;
 // on success the token is consumed and nil is returned. Failures return a
 // *Error wrapping errors.ErrApprovalTokenMissing; the token is left in
 // place on a mismatch so the user can see what was rejected.
 func (v *Verifier) Verify(ctx context.Context, repoPath string, forceAutonomous bool) error {
-	if forceAutonomous {
+	if forceAutonomous || (v.Required != nil && !v.Required()) {
 		return nil
 	}
 	// Read the token's existence BEFORE resolving HEAD. A missing token is

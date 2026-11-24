@@ -458,3 +458,10 @@ sets:
       - path: gsl.section.video
         description: Show the gsl video segment — GPU utilisation and memory as `[video] 12%|2.8G/16G` (nvidia-smi, Windows counters on WSL, or Linux DRM sysfs; hidden where no source exists). false hides it on this machine even when `gsl config enable video` is set; a segment renders only when this flag is on AND it is enabled in ~/.config/gsl/config.json.
         boolDefault: true
+  # gss runtime flags — read by the gss binary (sdk/gss/internal/approval) and
+  # by ai/hooks/safety_guard.sh rule 10 through `gff enabled`.
+  - area: gss
+    features:
+      - path: gss.approval-token.enabled
+        description: "Require the HEAD-bound approval token (~/.config/gss/approval.token) before the publish-class gss verbs (feature pr --ready, merged, restack; classic push/pr/sync), in both the gss binary and the safety_guard hook. Off by default (operator, 2026-11-23): the handshake added a round trip per PR. Reviews, CI, the privacy hooks and the hooksPath check still run. `gff set gss.approval-token.enabled true` turns it back on; GSS_REQUIRE_APPROVAL=on turns it on for one process; only the flag turns it off."
+        boolDefault: false
