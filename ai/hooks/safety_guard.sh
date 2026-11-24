@@ -246,17 +246,25 @@ gss_token_required() {
     case "$(printf '%s' "$v" | tr '[:upper:]' '[:lower:]')" in
         on|true|1) return 0 ;;
     esac
-    command -v gff >/dev/null 2>&1 && gff enabled gss.approval-token.enabled >/dev/null 2>&1
+    # Asked from / and against the registered dotfiles source, as gss does: a
+    # broken .github/gff/features.yaml in the cwd repo cannot read as off.
+    command -v gff >/dev/null 2>&1 \
+      && (cd / && gff --source com.github.sfc-gh-eraigosa.dotfiles enabled gss.approval-token.enabled) >/dev/null 2>&1
 }
 # The gate also sees gss spelled another way (#472): quotes and backslashes
-# are dropped first ("gss", \gss, g"s"s), and an absolute, ~ or $HOME path to
-# the binary counts ($HOME/opt/bin/gss). Bash runs all of them as gss.
+# are dropped first ("gss", \gss, g"s"s), and an absolute, ~, $HOME, ./ or ../
+# path to the binary counts ($HOME/opt/bin/gss, ~/gss). Bash runs all of them
+# as gss. The verb may start after ( or a backtick and end at ; | & ) or a
+# backtick, as in { gss push; } or $(gss push).
 CMD_GSS="${CMD_SCRUBBED//[\"\'\\]/}"
-GSS_VERB_ANY="(^|[[:space:];|&(])((/|~/|[\$]HOME/|[\$][{]HOME[}]/)[^[:space:];|&]*/)?gss${GSS_GLOBAL_FLAGS}[[:space:]]+"
-if { [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}(push|pr|sync)([[:space:]]|$) ]] \
-   || [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
-   || { [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}feature[[:space:]]+pr([[:space:]]|$) ]] \
-        && [[ "$CMD_GSS" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; } && gss_token_required; then
+GSS_LEAD='(^|[[:space:];|&(`])'
+GSS_BIN='((/|~/|[$]HOME/|[$][{]HOME[}]/|[.][.]?/)([^[:space:];|&`]*/)?)?gss'
+GSS_END='([[:space:];|&)`]|$)'
+GSS_VERB_ANY="${GSS_LEAD}${GSS_BIN}${GSS_GLOBAL_FLAGS}[[:space:]]+"
+if { [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}(push|pr|sync)${GSS_END} ]] \
+   || [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}feature[[:space:]]+(merged|restack)${GSS_END} ]] \
+   || { [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}feature[[:space:]]+pr${GSS_END} ]] \
+        && [[ "$CMD_GSS" =~ (^|[[:space:]])--ready(=|${GSS_END}) ]]; }; } && gss_token_required; then
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
         deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."
@@ -279,14 +287,33 @@ fi
 
 # --- 10b. the approval flag is the operator's (#472) ---
 # Like the token, gss.approval-token.enabled is set by the operator, never by
-# an assistant: refuse `gff set|unset` of the key and writes to the gff user
-# override file. Reading the flag (gff get/enabled/list) stays free.
-GFF_FLAG_WRITE='(^|[[:space:];|&(/])gff[[:space:]]+(set|unset)[[:space:]][^;|&]*gss[.]approval-token'
-GFF_FILE='[.]config/gff/config[.]ya?ml'
-GFF_FILE_WRITE='(>|(^|[[:space:];|&])(tee|mv|cp|rm|truncate|ln|install)[[:space:]]|sed[[:space:]]+(-[a-zA-Z]*[[:space:]]+)*-[a-zA-Z]*i|perl[[:space:]]+-[a-zA-Z]*i)'
-if [[ "$CMD_GSS" =~ $GFF_FLAG_WRITE ]] \
-   || { [[ "$CMD_GSS" =~ $GFF_FILE ]] && [[ "$CMD_GSS" =~ $GFF_FILE_WRITE ]]; }; then
-    deny "gss.approval-token.enabled is the operator's switch, like the approval token: an assistant never sets, unsets or edits it. Ask the operator to run it themselves (\`! gff set gss.approval-token.enabled <true|false>\`)."
+# an assistant: refuse `gff set|unset` of the key, and anything but a read of
+# ~/.config/gff. Reading the flag (gff get/enabled/list) stays free.
+# The directory check is an allowlist, not a list of writers: each part of
+# the command (split at ; | & ( ) and backticks) that names .config/gff must
+# start with a read-only command, and nothing may redirect into it. So rm,
+# mv, sed -i, chmod, unlink, cd-then-edit and anything not listed are all
+# refused. It catches mistakes and the plain spellings; it is a text match,
+# so xargs, a variable holding the path, or the Write/Edit tools get past it.
+GFF_FLAG_WRITE='(^|[[:space:];|&(/`])gff[[:space:]]+(set|unset)[[:space:]][^;|&]*gss[.]approval-token'
+gff_dir_written() {
+    local seg w words
+    local split="${CMD_GSS//[;|&()\`]/$'\n'}"
+    while IFS= read -r seg; do
+        [[ "$seg" =~ [.]config/gff ]] || continue
+        [[ "$seg" =~ \>[[:space:]]*[^[:space:]]*[.]config/gff ]] && return 0
+        read -ra words <<< "$seg"
+        w=""
+        for w in "${words[@]}"; do [[ "$w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || break; done
+        case "${w##*/}" in
+            cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|yq|ls|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|echo|printf|gff|git|gh) ;;
+            *) return 0 ;;
+        esac
+    done <<< "$split"
+    return 1
+}
+if [[ "$CMD_GSS" =~ $GFF_FLAG_WRITE ]] || gff_dir_written; then
+    deny "gss.approval-token.enabled is the operator's switch, like the approval token: an assistant never sets, unsets or edits it, nor changes ~/.config/gff. Reading is fine (cat, grep, diff, jq, ls; save a copy with \`cat ~/.config/gff/config.yaml > /tmp/x\`). To change the flag, ask the operator to run it themselves (\`! gff set gss.approval-token.enabled <true|false>\`)."
 fi
 
 # --- 11. gss feature checkpoint outside a worker worktree ---

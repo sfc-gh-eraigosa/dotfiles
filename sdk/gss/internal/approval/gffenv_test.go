@@ -20,7 +20,8 @@ func TestGFFIgnoresTheCommandEnv(t *testing.T) {
 	real := "#!/bin/sh\n" +
 		"[ \"$HOME\" = \"" + home + "\" ] || exit 3\n" +
 		"[ -z \"$XDG_DATA_HOME$XDG_CONFIG_HOME\" ] || exit 4\n" +
-		"[ \"$*\" = \"enabled " + FlagKey + "\" ] || exit 2\n" +
+		"[ \"$PWD\" = \"" + home + "\" ] || exit 5\n" +
+		"[ \"$*\" = \"--source " + Source + " enabled " + FlagKey + "\" ] || exit 2\n" +
 		"exit 0\n"
 	if err := os.WriteFile(filepath.Join(bin, "gff"), []byte(real), 0o755); err != nil {
 		t.Fatal(err)
@@ -37,12 +38,32 @@ func TestGFFIgnoresTheCommandEnv(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", "/nonexistent")
 	t.Setenv("XDG_CONFIG_HOME", "/nonexistent")
+	// gss runs from a repo whose own flag file is broken; gff must not read it
+	// (review of #473): it runs in the home dir and asks the dotfiles source.
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, ".github", "gff"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".github", "gff", "features.yaml"), []byte("garbage: [\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(repo)
 
 	if p, err := lookPath("gff"); err != nil || p != filepath.Join(bin, "gff") {
 		t.Fatalf("lookPath(gff) = %q, %v; want the gff under the user's home", p, err)
 	}
 	if !TokenRequired() {
 		t.Fatal("TokenRequired = false: the command's PATH/HOME/XDG reached gff")
+	}
+}
+
+// The real userHome comes from the password database, not $HOME (review of
+// #473): os.UserHomeDir would let `HOME=/x gss ...` pick gff's config.
+func TestUserHomeIgnoresHOME(t *testing.T) {
+	fake := t.TempDir()
+	t.Setenv("HOME", fake)
+	if h := userHome(); h == "" || h == fake {
+		t.Fatalf("userHome() = %q with HOME=%q; want the account's home", h, fake)
 	}
 }
 

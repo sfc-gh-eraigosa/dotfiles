@@ -15,7 +15,7 @@ func TestTokenRequired(t *testing.T) {
 	// gff answers only the exact key declared in .github/gff/features.yaml
 	// (TestFlagDeclared); any other question is an unknown key, exit 2.
 	on := func(args ...string) error {
-		if len(args) != 2 || args[0] != "enabled" || args[1] != "gss.approval-token.enabled" {
+		if len(args) != 4 || args[0] != "--source" || args[1] != "com.github.sfc-gh-eraigosa.dotfiles" || args[2] != "enabled" || args[3] != "gss.approval-token.enabled" {
 			return errors.New("exit status 2")
 		}
 		return nil

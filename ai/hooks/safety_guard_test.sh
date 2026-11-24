@@ -296,7 +296,7 @@ rm -f "$HOME/.config/gss/approval.token"
 GFF_STUB="$(mktemp -d "${TMPDIR:-/tmp}/sg-gff.XXXXXX")"
 # The stub answers only the exact question the hook must ask; any other
 # arguments exit 2 (gff's "unknown key"), which reads as off.
-printf '#!/bin/sh\n[ "$*" = "enabled gss.approval-token.enabled" ] || exit 2\nexit ${GFF_STUB_RC:-1}\n' > "$GFF_STUB/gff"
+printf '#!/bin/sh\n[ "$*" = "--source com.github.sfc-gh-eraigosa.dotfiles enabled gss.approval-token.enabled" ] || exit 2\nexit ${GFF_STUB_RC:-1}\n' > "$GFF_STUB/gff"
 chmod +x "$GFF_STUB/gff"
 SG_TMP+=("$GFF_STUB")
 # The variable only turns the check on: off, false or 0 cannot turn a gff on
@@ -357,8 +357,48 @@ done
   assert_exit 2 Bash 'XDG_DATA_HOME=/x "gss" feature pr --ready' 'env prefix plus quoted gss is gated'
   assert_exit 0 Bash 'git add sdk/gss'                     'a repo path ending in gss is not a gss command'
   assert_exit 0 Bash 'ls ~/opt/bin/gss'                    'naming the gss binary is not running it'
-  assert_exit 0 Bash 'cd sdk/gss && go test ./...'         'cd into a gss dir is not a gss command' )
+  assert_exit 0 Bash 'cd sdk/gss && go test ./...'         'cd into a gss dir is not a gss command'
+  # more spellings, from the reviews of #473
+  assert_exit 2 Bash "'gss' push"                          "single-quoted 'gss' push is gated"
+  assert_exit 2 Bash "g's's push"                          "split single quotes g's's push is gated"
+  # shellcheck disable=SC2016 # the literal ${HOME} is the command text under test
+  assert_exit 2 Bash '${HOME}/opt/bin/gss sync'            '${HOME} path to gss is gated'
+  # shellcheck disable=SC2088 # the literal ~ is the command text under test
+  assert_exit 2 Bash '~/gss push'                          'gss directly under ~ is gated'
+  # shellcheck disable=SC2016 # the literal $HOME is the command text under test
+  assert_exit 2 Bash '$HOME/gss push'                      'gss directly under $HOME is gated'
+  assert_exit 2 Bash 'cd /tmp && ./gss push'               './gss push is gated'
+  assert_exit 2 Bash '../bin/gss sync'                     '../bin/gss sync is gated'
+  assert_exit 2 Bash '{ gss push; }'                       'gss push; in a brace group is gated'
+  assert_exit 2 Bash 'if true; then gss push; fi'          'gss push; in an if is gated'
+  assert_exit 2 Bash '(gss push)'                          'gss push in a subshell is gated'
+  # shellcheck disable=SC2016 # the $(...) is the command text under test
+  assert_exit 2 Bash 'echo $(gss feature pr --ready)'      'feature pr --ready) in $(...) is gated'
+  # shellcheck disable=SC2016 # the backticks are the command text under test
+  assert_exit 2 Bash '`gss push`'                          'gss push in backticks is gated'
+  assert_exit 2 Bash 'gss push;true'                       'gss push;true is gated'
+  assert_exit 2 Bash 'gss sync|cat'                        'gss sync|cat is gated'
+  assert_exit 2 Bash 'gss feature merged&& true'           'feature merged&& is gated'
+  assert_exit 2 Bash 'gss feature pr --ready=true'         'feature pr --ready=true is gated'
+  assert_exit 0 Bash 'gss pushd'                           'a longer word is not the verb'
+  assert_exit 0 Bash 'gss feature pr --readyx'             '--readyx is not --ready'
+  assert_exit 0 Bash 'cd ../gss && ls'                     'cd into ../gss is not a gss command' )
 rm -rf "$GFF_STUB"
+# The hook asks gff from / with --source (review of #473): a broken
+# .github/gff/features.yaml in the cwd must not read as off.
+GFF_CWD_STUB=$(mktemp -d "${TMPDIR:-/tmp}/sg-gffcwd.XXXXXX"); SG_TMP+=("$GFF_CWD_STUB")
+mkdir -p "$GFF_CWD_STUB/bin" "$GFF_CWD_STUB/repo/.github/gff"
+cat > "$GFF_CWD_STUB/bin/gff" <<'STUB'
+#!/bin/sh
+# Like gff: a broken features.yaml in the cwd makes every answer fail.
+[ -f .github/gff/features.yaml ] && exit 1
+case " $* " in *" --source com.github.sfc-gh-eraigosa.dotfiles "*) exit 0 ;; esac
+exit 1
+STUB
+chmod +x "$GFF_CWD_STUB/bin/gff"
+echo 'garbage: [' > "$GFF_CWD_STUB/repo/.github/gff/features.yaml"
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_CWD_STUB/bin:$PATH"; cd "$GFF_CWD_STUB/repo" || exit 1
+  assert_exit 2 Bash 'gss push'                            'a broken gff file in the cwd repo does not turn the check off' )
 
 # The approval flag is the operator's (#472): an assistant may read it, never
 # set, unset or edit it. Independent of the flag's value.
@@ -372,6 +412,33 @@ assert_exit 0 Bash "gff get gss.approval-token.enabled"                 "reading
 assert_exit 0 Bash "gff enabled gss.approval-token.enabled"             "asking whether the approval flag is on is fine"
 assert_exit 0 Bash "cat ~/.config/gff/config.yaml"                      "reading the gff override file is fine"
 assert_exit 0 Bash "gff set herdr.theme dark"                           "gff set of another flag is fine"
+# ~/.config/gff is read-only to an assistant (reviews of #473): an allowlist of
+# readers, so writers nobody listed are refused too.
+assert_exit 2 Bash "cat x > ~/.config/gff/config.yaml"                  "redirecting into the gff override file is refused"
+assert_exit 2 Bash "cat x 2>&1 > ~/.config/gff/config.yaml"             "redirecting into it after 2>&1 is refused"
+assert_exit 2 Bash "echo x | tee -a ~/.config/gff/config.yaml"          "tee into it is refused"
+assert_exit 2 Bash "cp /tmp/x ~/.config/gff/"                           "copying into the gff dir is refused"
+assert_exit 2 Bash "mv ~/.config/gff/config.yaml /tmp/x"                "moving it away is refused"
+assert_exit 2 Bash "rm -rf ~/.config/gff"                               "removing the gff dir is refused"
+assert_exit 2 Bash "mv ~/.config/gff ~/.config/gff.bak"                 "moving the gff dir is refused"
+assert_exit 2 Bash "rm ~/.config/gff/config.*"                          "a glob over it is refused"
+assert_exit 2 Bash "cd ~/.config/gff && rm config.yaml"                 "cd into the gff dir, then rm, is refused"
+assert_exit 2 Bash "/bin/rm ~/.config/gff/config.yaml"                  "rm by path is refused"
+assert_exit 2 Bash "(rm ~/.config/gff/config.yaml)"                     "rm in a subshell is refused"
+assert_exit 2 Bash "/usr/bin/truncate -s 0 ~/.config/gff/config.yaml"   "truncate by path is refused"
+assert_exit 2 Bash "sed --in-place 's/a/b/' ~/.config/gff/config.yaml"  "sed --in-place is refused"
+assert_exit 2 Bash "sed -e 's/a/b/' -i ~/.config/gff/config.yaml"       "sed with -i late is refused"
+assert_exit 2 Bash "perl -e 's/a/b/' -pi ~/.config/gff/config.yaml"     "perl -pi is refused"
+assert_exit 2 Bash "unlink ~/.config/gff/config.yaml"                   "unlink is refused"
+assert_exit 2 Bash "chmod 000 ~/.config/gff/config.yaml"                "chmod is refused"
+assert_exit 2 Bash "dd if=/tmp/x of=~/.config/gff/config.yaml"          "dd onto it is refused"
+assert_exit 2 Bash "sudo rm ~/.config/gff/config.yaml"                  "sudo rm is refused"
+assert_exit 0 Bash "cat ~/.config/gff/config.yaml 2>/dev/null"          "reading it with stderr to /dev/null is fine"
+assert_exit 0 Bash "diff ~/.config/gff/config.yaml /tmp/x 2>&1"         "diffing it is fine"
+assert_exit 0 Bash "cat ~/.config/gff/config.yaml > /tmp/bak"           "saving a copy of it elsewhere is fine"
+assert_exit 0 Bash "grep x ~/.config/gff/config.yaml; rm -f /tmp/x"     "a read, then an rm of another file, is fine"
+assert_exit 0 Bash "ls -la ~/.config/gff/ | head"                       "listing the dir is fine"
+assert_exit 0 Bash "jq . < /dev/null; yq . ~/.config/gff/config.yaml"   "yq of it is fine"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"

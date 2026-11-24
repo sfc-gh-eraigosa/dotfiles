@@ -20,10 +20,19 @@ const FlagKey = "gss.approval-token.enabled"
 // the check off while the operator has it on.
 const EnvOverride = "GSS_REQUIRE_APPROVAL"
 
+// Source is the gff source that declares FlagKey: the dotfiles repo, as
+// `gff install` registers it. gff is asked about it by name, never about the
+// repo gss happens to run in.
+const Source = "com.github.sfc-gh-eraigosa.dotfiles"
+
 // gff is asked with an environment of its own (#472): the user's home from
-// the password database and a fixed PATH, nothing inherited. A command that
-// sets PATH, HOME or XDG_* for gss cannot make gff fail, which would read as
-// off.
+// the password database and a fixed PATH, nothing inherited, run from that
+// home with --source (review of #473). A command that sets PATH, HOME or
+// XDG_* for gss, or a broken .github/gff/features.yaml in the repo it runs
+// in, cannot make gff fail, which would read as off. An operator's own
+// XDG_CONFIG_HOME is ignored too: gff reads ~/.config/gff. When the account
+// has no home (user.Current fails), only the system dirs are searched, and
+// gff missing or failing reads as off, the default.
 //
 // lookPath, runGFF and userHome are swapped in tests.
 var (
@@ -35,6 +44,10 @@ var (
 		}
 		cmd := exec.Command(p, args...)
 		cmd.Env = gffEnv()
+		cmd.Dir = "/"
+		if h := userHome(); h != "" {
+			cmd.Dir = h
+		}
 		return cmd.Run()
 	}
 	userHome = func() string {
@@ -88,5 +101,5 @@ func TokenRequired() bool {
 	if _, err := lookPath("gff"); err != nil {
 		return false
 	}
-	return runGFF("enabled", FlagKey) == nil
+	return runGFF("--source", Source, "enabled", FlagKey) == nil
 }
