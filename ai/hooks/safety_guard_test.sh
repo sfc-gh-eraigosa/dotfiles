@@ -446,7 +446,8 @@ assert_exit 0 Bash "jq . < /dev/null; yq . ~/.config/gff/config.yaml"   "yq of i
 assert_exit 0 Bash "git commit -m \"gss: notes
 
 The user override lives in ~/.config/gff/config.yaml; rm is refused (see #472).\"" "a multi-line commit message that mentions the path is fine"
-assert_exit 0 Bash "git commit -m 'the override (~/.config/gff/config.yaml) is the operator'\\''s'" "a single-quoted message with ( and ' is fine"
+assert_exit 0 Bash "git commit -m \"the override (~/.config/gff/config.yaml) is the operator's\"" "a message with ( and ' is fine"
+assert_exit 0 Bash "git commit -m 'the override (~/.config/gff/config.yaml); see #472'" "a single-quoted message with ( and ; is fine"
 assert_exit 0 Bash "gh pr comment 1 --body \"cp of ~/.config/gff/config.yaml is refused; use cat\"" "a PR comment that mentions the path is fine"
 assert_exit 0 Bash "tree ~/.config/gff"                                 "tree of the gff dir is fine"
 assert_exit 2 Bash "gff --source x set gss.approval-token.enabled false" "gff with a flag before set is refused"
@@ -467,6 +468,22 @@ assert_exit 2 Bash "rm ~/.config/./gff/config.yaml"                     "a /./ i
 assert_exit 2 Bash "echo '{}' > ~/.config//gff/config.yaml"             "a redirect with a doubled slash is refused"
 assert_exit 0 Bash "yq '.flags' ~/.config/gff/config.yaml"              "plain yq of it is fine"
 assert_exit 0 Bash $'gff set herdr.theme dark\ngff get gss.approval-token.enabled' "a set of another flag, then a get on the next line, is fine"
+# reviews of dff896fe: bash's quoting, flag text in messages, more writers
+assert_exit 2 Bash 'echo \" ; rm ~/.config/gff/config.yaml ; echo \"'  'an escaped quote does not hide an rm'
+assert_exit 2 Bash 'echo "a\"b"; rm ~/.config/gff/config.yaml'         'an escaped quote inside quotes does not hide an rm'
+assert_exit 2 Bash "echo \$'it\\'s'; rm ~/.config/gff/config.yaml"     "a \$'...' string does not hide an rm"
+assert_exit 2 Bash 'echo "$(cat /dev/null; rm ~/.config/gff/config.yaml)"' 'a second command inside "$( )" is checked'
+assert_exit 2 Bash 'echo "`echo x; rm ~/.config/gff/config.yaml`"'    'a second command inside "` `" is checked'
+assert_exit 2 Bash "git config -f~/.config/gff/config.yaml a.b c"      "git config -f with the path attached is refused"
+assert_exit 2 Bash "git archive -o ~/.config/gff/config.yaml HEAD"     "git archive -o onto it is refused"
+assert_exit 2 Bash "sudo gff set gss.approval-token.enabled false"     "gff behind sudo, set of the flag, is refused"
+assert_exit 2 Bash "env X=1 gff --source x unset gss.approval-token.enabled" "gff behind env, unset of the flag, is refused"
+assert_exit 0 Bash 'git commit -m "gff list shows whether the operator did set gss.approval-token.enabled"' "a commit message about gff set of the flag is fine"
+assert_exit 0 Bash 'gh pr comment 1 --body "run gff set gss.approval-token.enabled false yourself"' "a PR comment that quotes the set command is fine"
+assert_exit 0 Bash 'git commit -m "refuse cp -f into ~/.config/gff"'   "a message with -f and a gff path is fine"
+assert_exit 0 Bash 'git commit -m "safety_guard: refuse > ~/.config/gff/config.yaml"' "a quoted > before a gff path is fine"
+assert_exit 0 Bash 'tail -f ~/.config/gff/config.yaml'                 "tail -f of it is fine"
+assert_exit 2 Bash "yq --in-place '.a = 1' ~/.config/gff/config.yaml"  "yq --in-place on it is refused"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"

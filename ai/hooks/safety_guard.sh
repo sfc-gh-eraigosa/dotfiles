@@ -290,72 +290,88 @@ fi
 # an assistant: refuse `gff [flags] set|unset` of the key, and anything but a
 # read of gff's state (~/.config/gff, the overrides; ~/.local/share/gff, the
 # registered snapshots). Reading the flag (gff get/enabled/list) stays free.
-# The directory check is an allowlist, not a list of writers: each part of
-# the command (split at ; | & ( ) backticks and newlines, outside quotes)
-# that names a gff dir must start with a read-only command, and nothing may
-# redirect into it. So rm, mv, sed -i, chmod, unlink, cd-then-edit and
-# anything not listed are all refused, while a commit message or PR body that
-# only mentions the path passes. It catches mistakes and the plain spellings;
-# it is a text match, so xargs, a variable holding the path, removing a
-# parent dir, or the Write/Edit tools get past it.
-GFF_FLAG_WRITE=$'(^|[[:space:];|&(/`])gff[[:space:]]([^;|&\n]*[[:space:]])?(set|unset)[[:space:]][^;|&\n]*gss[.]approval-token'
+# Each part of the command (split at ; | & ( ) < backticks and newlines) is
+# checked on its own:
+# - a part whose command is gff (also behind sudo, env, command, exec, nohup,
+#   nice, timeout or xargs) may not set or unset the flag, whatever flags
+#   come first;
+# - a part that names a gff dir must start with a read-only command, and
+#   nothing may redirect into a gff dir. That is an allowlist, not a list of
+#   writers: rm, mv, sed -i, chmod, unlink, cd-then-edit and anything not
+#   listed are all refused.
+# Quoted text stays one part, so a commit message or PR body that mentions
+# the flag or a path passes. That reading is used only for a short command
+# with no backslash, $'...', $( or backtick, where bash's quoting is plain;
+# any other command is split strictly, quotes and all, as if it were code.
+# It catches mistakes and the plain spellings. It is a text match, so xargs,
+# a variable holding the path, removing a parent dir, or the Write/Edit
+# tools get past it. A message that names a gff path next to a backtick or
+# backslash is refused; pass it through a heredoc (-F - <<EOF), which is
+# never checked as code.
 GFF_DIRS='[.]config/gff|[.]local/share/gff'
+GFF_WRAPPERS='sudo|env|command|exec|nohup|nice|timeout|xargs'
 # Paths are normalized first: a//b and a/./b name a/b.
 gff_norm() {
     local t="$1"
     while [[ "$t" == *//* || "$t" == */./* ]]; do t="${t//\/\//\/}"; t="${t//\/.\//\/}"; done
     printf '%s' "$t"
 }
-# The command with quotes dropped and separators inside quotes made spaces,
-# so quoted text stays one part; $( and backticks inside double quotes still
-# run, so they break the part there.
+# The command's parts, one per line.
 gff_cmd_parts() {
     local s out="" q="" c i
     s="$(gff_norm "$CMD_SCRUBBED")"
+    if [ "${#s}" -gt 4000 ] || [[ "$s" == *\\* || "$s" == *\$\'* || "$s" == *\$\(* || "$s" == *\`* ]]; then
+        s="${s//[\"\']/}"
+        printf '%s\n' "${s//[;|&()<\`]/$'\n'}"
+        return
+    fi
     for ((i = 0; i < ${#s}; i++)); do
         c="${s:i:1}"
         if [ -z "$q" ]; then
             case "$c" in
                 \"|\') q=$c ;;
-                \\) ;;
-                ';'|'|'|'&'|'('|')'|'`') out+=$'\n' ;;
+                ';'|'|'|'&'|'('|')'|'<') out+=$'\n' ;;
                 *) out+=$c ;;
             esac
         elif [ "$c" = "$q" ]; then
             q=""
-        elif [ "$q" = '"' ] && { [ "$c" = '`' ] || [ "${s:i:2}" = '$(' ]; }; then
-            out+=$'\n'
         else
             case "$c" in
-                ';'|'|'|'&'|'('|')'|'`'|$'\n') out+=' ' ;;
+                ';'|'|'|'&'|'('|')'|'<'|'>'|$'\n') out+=' ' ;;
                 *) out+=$c ;;
             esac
         fi
     done
     printf '%s\n' "$out"
 }
-gff_dir_written() {
-    local seg w words
-    [[ "$(gff_norm "$CMD_GSS")" =~ $GFF_DIRS ]] || return 1
+# The part's command word (after VAR=x assignments), and its words.
+gff_guard() {
+    local seg w words n
+    [[ "$CMD_GSS" == *gff* ]] || return 1
     while IFS= read -r seg; do
+        read -ra words <<< "$seg"
+        n=0
+        while [ "$n" -lt "${#words[@]}" ] && [[ "${words[n]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do n=$((n + 1)); done
+        w="${words[n]:-}"; w="${w##*/}"
+        # gff [flags] set|unset gss.approval-token...
+        if [ "$w" = gff ] || { [[ "$w" =~ ^($GFF_WRAPPERS)$ ]] && [[ "$seg" =~ (^|[[:space:]/])gff[[:space:]] ]]; }; then
+            [[ "$seg" =~ gff[[:space:]]([^[:space:]]+[[:space:]]+)*(set|unset)[[:space:]].*gss[.]approval-token ]] && return 0
+        fi
         [[ "$seg" =~ $GFF_DIRS ]] || continue
         [[ "$seg" =~ \>[[:space:]]*[^[:space:]]*($GFF_DIRS) ]] && return 0
-        read -ra words <<< "$seg"
-        w=""
-        for w in "${words[@]}"; do [[ "$w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || break; done
-        case "${w##*/}" in
+        case "$w" in
             cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|ls|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|echo|printf|gff|gh) ;;
-            # readers that can also write: refused with their write flags
-            # (git config -f, git diff --output, yq -i, tree -o)
-            git) [[ "$seg" =~ [[:space:]](--file|-f|--output)([[:space:]]|=) ]] && return 0 ;;
-            yq) [[ "$seg" =~ [[:space:]](-[A-Za-z]*i|--inplace)([[:space:]]|=|$) ]] && return 0 ;;
-            tree) [[ "$seg" =~ [[:space:]]-[A-Za-z]*o([[:space:]]|$) ]] && return 0 ;;
+            # readers that can also write: refused when a write flag takes a
+            # gff path, attached or not (git config -f<path>, git diff
+            # --output=, git archive -o, tree -o), and yq with -i at all
+            git|tree) [[ "$seg" =~ [[:space:]](-[A-Za-z]*[fo]|--file|--output)(=|[[:space:]]*)[^[:space:]]*($GFF_DIRS) ]] && return 0 ;;
+            yq) [[ "$seg" =~ [[:space:]](-[A-Za-z]*i|--inplace|--in-place)([[:space:]]|=|$) ]] && return 0 ;;
             *) return 0 ;;
         esac
     done < <(gff_cmd_parts)
     return 1
 }
-if [[ "$CMD_GSS" =~ $GFF_FLAG_WRITE ]] || gff_dir_written; then
+if gff_guard; then
     deny "gss.approval-token.enabled is the operator's switch, like the approval token: an assistant never sets, unsets or edits it, nor changes ~/.config/gff. Reading is fine (cat, grep, diff, jq, ls; save a copy with \`cat ~/.config/gff/config.yaml > /tmp/x\`). To change the flag, ask the operator to run it themselves (\`! gff set gss.approval-token.enabled <true|false>\`)."
 fi
 
