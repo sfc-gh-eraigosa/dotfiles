@@ -385,6 +385,9 @@ done
   assert_exit 2 Bash 'gss feature pr --ready>/dev/null'    'feature pr --ready>/dev/null is gated'
   assert_exit 2 Bash "\$'gss' push"                        "\$'gss' push is gated"
   assert_exit 2 Bash '$"gss" push'                         '$"gss" push is gated'
+  assert_exit 2 Bash $'g\\\nss push'                       'g\<nl>ss push (one word) is gated'
+  assert_exit 2 Bash $'# \\\ngss push'                     'a comment ending in a backslash does not hide gss push'
+  assert_exit 2 Bash $'gss \\\n push'                      'gss, backslash-newline, push is gated'
   assert_exit 0 Bash 'gss pushd'                           'a longer word is not the verb'
   assert_exit 0 Bash 'gss feature pr --readyx'             '--readyx is not --ready'
   assert_exit 0 Bash 'cd ../gss && ls'                     'cd into ../gss is not a gss command' )
@@ -532,6 +535,13 @@ assert_exit 2 Bash "git format-patch --output-directory ~/.config/gff HEAD~1" "g
 assert_exit 2 Bash "gh release download -O ~/.config/gff/config.yaml"  "gh -O onto it is refused"
 assert_exit 2 Bash "gh repo clone o/r ~/.config/gff"                   "gh repo clone into the gff dir is refused"
 assert_exit 0 Bash "tree -f ~/.config/gff"                             "tree -f of the gff dir is fine"
+# agy review of 895a1f61: backslash-newline joins words; not inside a comment
+assert_exit 2 Bash $'# \\\ngff set gss.approval-token.enabled false'   "a backslash at the end of a comment does not hide the next line"
+assert_exit 2 Bash $'echo ok # \\\nrm ~/.config/gff/config.yaml'       "a comment ending in a backslash does not hide an rm"
+assert_exit 2 Bash $'g\\\nff set gss.approval-token.enabled false'     "g\\<nl>ff set (one word) is refused"
+assert_exit 2 Bash $'rm ~/.config/g\\\nff/config.yaml'                 "a gff path split by a backslash-newline is refused"
+assert_exit 2 Bash $'gff s\\\net gss.approval-token.enabled false'     "s\\<nl>et (one word) is refused"
+assert_exit 2 Bash $'gff \\\n set gss.approval-token.enabled false'    "gff, backslash-newline, then set is refused"
 assert_exit 0 Bash "gh pr comment 1 --body \"the override is ~/.config/gff/config.yaml\"" "a gh comment naming the path is still fine"
 
 # Clean up

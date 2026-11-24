@@ -256,19 +256,39 @@ gss_token_required() {
 # path to the binary counts ($HOME/opt/bin/gss, ~/gss). Bash runs all of them
 # as gss. The verb may start after ( or a backtick and end at ; | & ) or a
 # backtick, as in { gss push; } or $(gss push).
-# A backslash-newline joins two lines into one command, as in bash. $'...'
-# and $"..." are quotes too: their $ goes with them.
-CMD_JOINED="${CMD_SCRUBBED//\\$'\n'/ }"
-CMD_GSS="${CMD_JOINED//\$\'/\'}"; CMD_GSS="${CMD_GSS//\$\"/\"}"
-CMD_GSS="${CMD_GSS//[\"\'\\]/}"
+# $'...' and $"..." are quotes too: their $ goes with them.
+# A backslash-newline joins two lines into one word, as in bash (g\<nl>ss is
+# gss), except inside a # comment, where the next line runs on its own: a
+# line with a # that starts a word is never joined to the next.
+gss_join() {
+    local out="" line
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [[ "$line" == *\\ ]] && ! [[ "$line" =~ (^|[[:space:]\;\|\&\(\)])# ]]; then
+            out+="${line%\\}"
+        else
+            out+="$line"$'\n'
+        fi
+    done <<< "$1"
+    printf '%s' "$out"
+}
+gss_strip() {
+    local t="${1//\$\'/\'}"; t="${t//\$\"/\"}"
+    printf '%s' "${t//[\"\'\\]/}"
+}
+CMD_JOINED="$(gss_join "$CMD_SCRUBBED")"
+CMD_GSS="$(gss_strip "$CMD_JOINED")"
 GSS_LEAD='(^|[[:space:];|&(`])'
 GSS_BIN='((/|~/|[$]HOME/|[$][{]HOME[}]/|[.][.]?/)([^[:space:];|&`]*/)?)?gss'
 GSS_END='([[:space:];|&)`<>]|$)'
 GSS_VERB_ANY="${GSS_LEAD}${GSS_BIN}${GSS_GLOBAL_FLAGS}[[:space:]]+"
-if { [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}(push|pr|sync)${GSS_END} ]] \
-   || [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}feature[[:space:]]+(merged|restack)${GSS_END} ]] \
-   || { [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}feature[[:space:]]+pr${GSS_END} ]] \
-        && [[ "$CMD_GSS" =~ (^|[[:space:]])--ready(=|${GSS_END}) ]]; }; } && gss_token_required; then
+gss_publish_verb() {
+    local t="$1"
+    [[ "$t" =~ ${GSS_VERB_ANY}(push|pr|sync)${GSS_END} ]] \
+      || [[ "$t" =~ ${GSS_VERB_ANY}feature[[:space:]]+(merged|restack)${GSS_END} ]] \
+      || { [[ "$t" =~ ${GSS_VERB_ANY}feature[[:space:]]+pr${GSS_END} ]] \
+           && [[ "$t" =~ (^|[[:space:]])--ready(=|${GSS_END}) ]]; }
+}
+if gss_publish_verb "$CMD_GSS" && gss_token_required; then
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
         deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."
@@ -321,12 +341,12 @@ gff_norm() {
     while [[ "$t" =~ ^(.*/)[^/[:space:]]+/[.][.]/(.*)$ ]]; do t="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"; done
     printf '%s' "$t"
 }
-# The command's parts, one per line.
+# The parts of a command ($1, the text; $2, the same text quote-stripped), one per line.
 gff_cmd_parts() {
-    local s="$CMD_JOINED" out="" q="" c i
+    local s="$1" out="" q="" c i
     if [ "${#s}" -gt 4000 ] || [[ "$s" == *\\* || "$s" == *\$[\'\"\(]* || "$s" == *\`* ]]; then
         # strict: the quote-stripped command (as rule 10 sees it), split like code
-        s="$(gff_norm "$CMD_GSS")"
+        s="$(gff_norm "$2")"
         printf '%s\n' "${s//[;|&()\`]/$'\n'}"
         return
     fi
@@ -358,9 +378,9 @@ gff_cmd_parts() {
     done
     gff_norm "$out"; echo
 }
-gff_guard() {
+gff_guard_text() {
     local seg w words n prev k sub
-    [[ "$CMD_GSS" == *gff* ]] || return 1
+    [[ "$2" == *gff* ]] || return 1
     while IFS= read -r seg; do
         read -ra words <<< "$seg"
         # the part's command word: past VAR=x assignments (one naming a gff
@@ -416,10 +436,10 @@ gff_guard() {
             yq) [[ "$seg" =~ [[:space:]](-[A-Za-z]*i[A-Za-z]*|--inplace|--in-place)([[:space:]]|=|$) ]] && return 0 ;;
             *) return 0 ;;
         esac
-    done < <(gff_cmd_parts)
+    done < <(gff_cmd_parts "$1" "$2")
     return 1
 }
-if gff_guard; then
+if gff_guard_text "$CMD_JOINED" "$CMD_GSS"; then
     deny "gss.approval-token.enabled is the operator's switch, like the approval token: an assistant never sets, unsets or edits it, nor changes ~/.config/gff. Reading is fine (cat, grep, diff, jq, ls; save a copy with \`cat ~/.config/gff/config.yaml > /tmp/x\`). To change the flag, ask the operator to run it themselves (\`! gff set gss.approval-token.enabled <true|false>\`)."
 fi
 
