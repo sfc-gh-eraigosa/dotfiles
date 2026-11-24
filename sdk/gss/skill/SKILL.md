@@ -44,7 +44,7 @@ This skill provides a structured and safe workflow for managing Git repositories
 
 > **Off by default since 2026-11-23.** The token is required only when the gff
 > flag `gss.approval-token.enabled` is on (`gff get gss.approval-token.enabled`;
-> `GSS_REQUIRE_APPROVAL=on|off` overrides it for one process). While it is off,
+> `GSS_REQUIRE_APPROVAL=on` turns it on for one process; only the flag turns it off). While it is off,
 > the gated verbs below run directly: no token, no handshake. Everything else
 > stays: reviews, CI, the privacy hooks and the hooksPath check. The rest of
 > this section applies when the flag is on.

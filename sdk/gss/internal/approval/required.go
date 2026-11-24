@@ -12,8 +12,10 @@ import (
 // turns it back on. The safety_guard hook reads the same flag.
 const FlagKey = "gss.approval-token.enabled"
 
-// EnvOverride, when set to on/true/1 or off/false/0, decides without asking
-// gff (tests, and a one-off `GSS_REQUIRE_APPROVAL=on gss ...`).
+// EnvOverride set to on/true/1 turns the token on without asking gff (tests,
+// and a one-off `GSS_REQUIRE_APPROVAL=on gss ...`). It can only turn the check
+// on: turning it off is the gff flag's alone, so no command line can switch
+// the check off while the operator has it on.
 const EnvOverride = "GSS_REQUIRE_APPROVAL"
 
 // lookPath and runGFF are swapped in tests.
@@ -22,16 +24,14 @@ var (
 	runGFF   = func(args ...string) error { return exec.Command("gff", args...).Run() }
 )
 
-// TokenRequired reports whether gated verbs need an approval token: the
-// env override if set, else `gff enabled gss.approval-token.enabled` (exit
+// TokenRequired reports whether gated verbs need an approval token: on when
+// the env override says on, else `gff enabled gss.approval-token.enabled` (exit
 // 0 = on). No gff, an unknown flag, or any other answer means off, the
 // default.
 func TokenRequired() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(EnvOverride))) {
 	case "on", "true", "1":
 		return true
-	case "off", "false", "0":
-		return false
 	}
 	if _, err := lookPath("gff"); err != nil {
 		return false

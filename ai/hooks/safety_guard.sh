@@ -237,13 +237,14 @@ fi
 # Off by default (operator, 2026-11-23): only when the gff flag
 # gss.approval-token.enabled is on, or GSS_REQUIRE_APPROVAL=on, is the token
 # required. gss itself reads the same switch (sdk/gss/internal/approval).
+# The variable can only turn the check on; turning it off is the flag's alone,
+# so no command line can switch it off while the operator has it on.
 gss_token_required() {
     # trim the ends only, like Go's strings.TrimSpace in gss
     local v="${GSS_REQUIRE_APPROVAL:-}"
     v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
     case "$(printf '%s' "$v" | tr '[:upper:]' '[:lower:]')" in
         on|true|1) return 0 ;;
-        off|false|0) return 1 ;;
     esac
     command -v gff >/dev/null 2>&1 && gff enabled gss.approval-token.enabled >/dev/null 2>&1
 }
@@ -251,12 +252,6 @@ if { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
    || [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
    || { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+pr([[:space:]]|$) ]] \
         && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; } && gss_token_required; then
-    # The override belongs to the operator's shell, not to the command: a
-    # gated command that sets it would turn the check off inside gss while
-    # this hook only sees that some token file exists.
-    if [[ "$CMD_SCRUBBED" =~ GSS_REQUIRE_APPROVAL[[:space:]]*= ]]; then
-        deny "The approval token is required here, and this gss command sets GSS_REQUIRE_APPROVAL itself. Only the operator turns the check off (gff set gss.approval-token.enabled false, or GSS_REQUIRE_APPROVAL=off in their own shell)."
-    fi
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
         deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."

@@ -25,7 +25,7 @@ it"; never add that label with gh pr edit. On a PR that is already ready,
 --ready --merge only adds the label.
 
 Gated on the approval token when the gff flag gss.approval-token.enabled
-is on (off by default; GSS_REQUIRE_APPROVAL=on|off for one run). The token is the
+is on (off by default; GSS_REQUIRE_APPROVAL=on turns it on for one run; only the flag turns it off). The token is the
 HUMAN's approval: the person runs
   git rev-parse HEAD > ~/.config/gss/approval.token
 and an assistant never writes it. By default gss refuses to promote a

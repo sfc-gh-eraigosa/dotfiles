@@ -463,5 +463,5 @@ sets:
   - area: gss
     features:
       - path: gss.approval-token.enabled
-        description: "Require the HEAD-bound approval token (~/.config/gss/approval.token) before the publish-class gss verbs (feature pr --ready, merged, restack; classic push/pr/sync), in both the gss binary and the safety_guard hook. Off by default (operator, 2026-11-23): the handshake added a round trip per PR. Reviews, CI, the privacy hooks and the hooksPath check still run. `gff set gss.approval-token.enabled true` turns it back on; GSS_REQUIRE_APPROVAL=on|off overrides it for one process."
+        description: "Require the HEAD-bound approval token (~/.config/gss/approval.token) before the publish-class gss verbs (feature pr --ready, merged, restack; classic push/pr/sync), in both the gss binary and the safety_guard hook. Off by default (operator, 2026-11-23): the handshake added a round trip per PR. Reviews, CI, the privacy hooks and the hooksPath check still run. `gff set gss.approval-token.enabled true` turns it back on; GSS_REQUIRE_APPROVAL=on turns it on for one process; only the flag turns it off."
         boolDefault: false
