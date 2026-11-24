@@ -20,7 +20,7 @@ func TestGFFIgnoresTheCommandEnv(t *testing.T) {
 	real := "#!/bin/sh\n" +
 		"[ \"$HOME\" = \"" + home + "\" ] || exit 3\n" +
 		"[ -z \"$XDG_DATA_HOME$XDG_CONFIG_HOME\" ] || exit 4\n" +
-		"[ \"$PWD\" = \"" + home + "\" ] || exit 5\n" +
+		"[ \"$(pwd -P)\" = / ] || exit 5\n" +
 		"[ \"$*\" = \"--source " + Source + " enabled " + FlagKey + "\" ] || exit 2\n" +
 		"exit 0\n"
 	if err := os.WriteFile(filepath.Join(bin, "gff"), []byte(real), 0o755); err != nil {
@@ -39,7 +39,7 @@ func TestGFFIgnoresTheCommandEnv(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "/nonexistent")
 	t.Setenv("XDG_CONFIG_HOME", "/nonexistent")
 	// gss runs from a repo whose own flag file is broken; gff must not read it
-	// (review of #473): it runs in the home dir and asks the dotfiles source.
+	// (reviews of #473): it runs in / and asks the dotfiles source.
 	repo := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(repo, ".github", "gff"), 0o755); err != nil {
 		t.Fatal(err)

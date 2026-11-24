@@ -259,7 +259,7 @@ gss_token_required() {
 CMD_GSS="${CMD_SCRUBBED//[\"\'\\]/}"
 GSS_LEAD='(^|[[:space:];|&(`])'
 GSS_BIN='((/|~/|[$]HOME/|[$][{]HOME[}]/|[.][.]?/)([^[:space:];|&`]*/)?)?gss'
-GSS_END='([[:space:];|&)`]|$)'
+GSS_END='([[:space:];|&)`<>]|$)'
 GSS_VERB_ANY="${GSS_LEAD}${GSS_BIN}${GSS_GLOBAL_FLAGS}[[:space:]]+"
 if { [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}(push|pr|sync)${GSS_END} ]] \
    || [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}feature[[:space:]]+(merged|restack)${GSS_END} ]] \
@@ -298,13 +298,20 @@ fi
 # only mentions the path passes. It catches mistakes and the plain spellings;
 # it is a text match, so xargs, a variable holding the path, removing a
 # parent dir, or the Write/Edit tools get past it.
-GFF_FLAG_WRITE='(^|[[:space:];|&(/`])gff[[:space:]]([^;|&]*[[:space:]])?(set|unset)[[:space:]][^;|&]*gss[.]approval-token'
+GFF_FLAG_WRITE=$'(^|[[:space:];|&(/`])gff[[:space:]]([^;|&\n]*[[:space:]])?(set|unset)[[:space:]][^;|&\n]*gss[.]approval-token'
 GFF_DIRS='[.]config/gff|[.]local/share/gff'
+# Paths are normalized first: a//b and a/./b name a/b.
+gff_norm() {
+    local t="$1"
+    while [[ "$t" == *//* || "$t" == */./* ]]; do t="${t//\/\//\/}"; t="${t//\/.\//\/}"; done
+    printf '%s' "$t"
+}
 # The command with quotes dropped and separators inside quotes made spaces,
 # so quoted text stays one part; $( and backticks inside double quotes still
 # run, so they break the part there.
 gff_cmd_parts() {
-    local s="$CMD_SCRUBBED" out="" q="" c i
+    local s out="" q="" c i
+    s="$(gff_norm "$CMD_SCRUBBED")"
     for ((i = 0; i < ${#s}; i++)); do
         c="${s:i:1}"
         if [ -z "$q" ]; then
@@ -329,7 +336,7 @@ gff_cmd_parts() {
 }
 gff_dir_written() {
     local seg w words
-    [[ "$CMD_GSS" =~ $GFF_DIRS ]] || return 1
+    [[ "$(gff_norm "$CMD_GSS")" =~ $GFF_DIRS ]] || return 1
     while IFS= read -r seg; do
         [[ "$seg" =~ $GFF_DIRS ]] || continue
         [[ "$seg" =~ \>[[:space:]]*[^[:space:]]*($GFF_DIRS) ]] && return 0
@@ -337,9 +344,12 @@ gff_dir_written() {
         w=""
         for w in "${words[@]}"; do [[ "$w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || break; done
         case "${w##*/}" in
-            cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|yq|ls|tree|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|echo|printf|gff|gh) ;;
-            # git only for text that mentions the path (a commit message), never git config --file
-            git) [[ "$seg" =~ [[:space:]](--file|-f)([[:space:]]|=) ]] && return 0 ;;
+            cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|ls|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|echo|printf|gff|gh) ;;
+            # readers that can also write: refused with their write flags
+            # (git config -f, git diff --output, yq -i, tree -o)
+            git) [[ "$seg" =~ [[:space:]](--file|-f|--output)([[:space:]]|=) ]] && return 0 ;;
+            yq) [[ "$seg" =~ [[:space:]](-[A-Za-z]*i|--inplace)([[:space:]]|=|$) ]] && return 0 ;;
+            tree) [[ "$seg" =~ [[:space:]]-[A-Za-z]*o([[:space:]]|$) ]] && return 0 ;;
             *) return 0 ;;
         esac
     done < <(gff_cmd_parts)

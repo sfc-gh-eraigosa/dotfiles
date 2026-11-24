@@ -26,8 +26,8 @@ const EnvOverride = "GSS_REQUIRE_APPROVAL"
 const Source = "com.github.sfc-gh-eraigosa.dotfiles"
 
 // gff is asked with an environment of its own (#472): the user's home from
-// the password database and a fixed PATH, nothing inherited, run from that
-// home with --source (review of #473). A command that sets PATH, HOME or
+// the password database and a fixed PATH, nothing inherited, run from / with
+// --source (reviews of #473). A command that sets PATH, HOME or
 // XDG_* for gss, or a broken .github/gff/features.yaml in the repo it runs
 // in, cannot make gff fail, which would read as off. An operator's own
 // XDG_CONFIG_HOME is ignored too: gff reads ~/.config/gff. When the account
@@ -44,10 +44,8 @@ var (
 		}
 		cmd := exec.Command(p, args...)
 		cmd.Env = gffEnv()
+		// "/" like the hook: the home dir can be writable or a repo itself.
 		cmd.Dir = "/"
-		if h := userHome(); h != "" {
-			cmd.Dir = h
-		}
 		return cmd.Run()
 	}
 	userHome = func() string {

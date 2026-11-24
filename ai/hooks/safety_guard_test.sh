@@ -380,6 +380,9 @@ done
   assert_exit 2 Bash 'gss sync|cat'                        'gss sync|cat is gated'
   assert_exit 2 Bash 'gss feature merged&& true'           'feature merged&& is gated'
   assert_exit 2 Bash 'gss feature pr --ready=true'         'feature pr --ready=true is gated'
+  assert_exit 2 Bash 'gss push>/dev/null'                  'gss push>/dev/null is gated'
+  assert_exit 2 Bash 'gss sync</dev/null'                  'gss sync</dev/null is gated'
+  assert_exit 2 Bash 'gss feature pr --ready>/dev/null'    'feature pr --ready>/dev/null is gated'
   assert_exit 0 Bash 'gss pushd'                           'a longer word is not the verb'
   assert_exit 0 Bash 'gss feature pr --readyx'             '--readyx is not --ready'
   assert_exit 0 Bash 'cd ../gss && ls'                     'cd into ../gss is not a gss command' )
@@ -453,6 +456,17 @@ assert_exit 2 Bash "rm -rf ~/.local/share/gff"                          "removin
 assert_exit 2 Bash "echo \"\$(rm ~/.config/gff/config.yaml)\""          "rm inside \$( ) inside double quotes is refused"
 assert_exit 2 Bash "echo \"\`rm ~/.config/gff/config.yaml\`\""          "rm in backticks inside double quotes is refused"
 assert_exit 2 Bash "echo 'x'; rm ~/.config/gff/config.yaml"             "rm after a quoted echo is refused"
+# agy review of 8b8b7e31: writer flags on readers, odd paths, newlines
+assert_exit 2 Bash "yq -i '.a = 1' ~/.config/gff/config.yaml"           "yq -i on it is refused"
+assert_exit 2 Bash "yq --inplace 'del(.)' ~/.config/gff/config.yaml"    "yq --inplace on it is refused"
+assert_exit 2 Bash "git config -f ~/.config/gff/config.yaml a.b c"      "git config -f on it is refused"
+assert_exit 2 Bash "git diff --output=~/.config/gff/config.yaml"        "git diff --output onto it is refused"
+assert_exit 2 Bash "tree -o ~/.config/gff/config.yaml /"                "tree -o onto it is refused"
+assert_exit 2 Bash "rm ~/.config//gff/config.yaml"                      "a doubled slash in the path is refused"
+assert_exit 2 Bash "rm ~/.config/./gff/config.yaml"                     "a /./ in the path is refused"
+assert_exit 2 Bash "echo '{}' > ~/.config//gff/config.yaml"             "a redirect with a doubled slash is refused"
+assert_exit 0 Bash "yq '.flags' ~/.config/gff/config.yaml"              "plain yq of it is fine"
+assert_exit 0 Bash $'gff set herdr.theme dark\ngff get gss.approval-token.enabled' "a set of another flag, then a get on the next line, is fine"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"
