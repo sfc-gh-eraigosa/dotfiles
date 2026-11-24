@@ -127,11 +127,79 @@ resolve_canonical_claude() {
     return 0
 }
 
+# Echo the node version (e.g. 24.18.0) of a path inside an nvm tree
+# (<NVM_DIR>/versions/node/v<ver>/...), or nothing when it is not one.
+nvm_node_version_of() {
+    case "$1" in
+        */versions/node/v*/*)
+            printf '%s\n' "$1" | sed 's|.*/versions/node/v\([0-9][0-9.]*\)/.*|\1|' ;;
+    esac
+}
+
+# Exit 0 when dotted version $1 is strictly lower than $2 (numeric per field;
+# awk, not `sort -V`, which BSD sort lacks).
+version_lt() {
+    awk -v a="$1" -v b="$2" 'BEGIN {
+        na = split(a, x, "."); nb = split(b, y, "."); n = (na > nb) ? na : nb
+        for (i = 1; i <= n; i++) {
+            if (x[i] + 0 < y[i] + 0) exit 0
+            if (x[i] + 0 > y[i] + 0) exit 1
+        }
+        exit 1
+    }'
+}
+
+# Re-point a ~/.local/bin/claude symlink that targets the npm global of an
+# OLDER nvm node (e.g. .../node/v24.16.0/lib/node_modules/...). `npm update -g`
+# only updates the CURRENT node's global, and ~/.local/bin precedes nvm on
+# PATH, so such a link silently pins claude to the old version forever (seen on
+# a Pi: link -> v24.16.0 at 2.1.191 while v24.18.0 held 2.1.330). Re-pointing
+# (not removing) keeps the path working for non-interactive ssh shells that
+# never load nvm. Acts ONLY when the canonical claude is itself an nvm npm
+# global on a strictly NEWER node than the link's target — so it can never
+# move the link to an older node (e.g. an nvm `default` alias older than the
+# node the user linked by hand). Every skip says why.
+repoint_stale_nvm_link() {
+    local link="$1" target="$2"
+    local canonical; canonical="$(resolve_canonical_claude)"
+    if [ -z "$canonical" ] || [ ! -x "$canonical" ]; then
+        echo "  Skipping stale-nvm re-point of $link: no canonical claude confirmed."
+        return 0
+    fi
+    case "$canonical" in
+        "$HOME/.local/"*)
+            echo "  Skipping stale-nvm re-point of $link: canonical also resolves under ~/.local."
+            return 0 ;;
+    esac
+    local prefix="${canonical%/bin/claude}"
+    case "$target" in
+        "$prefix"/*|"$canonical") return 0 ;;  # already current
+    esac
+    local have want
+    have="$(nvm_node_version_of "$target")"
+    want="$(nvm_node_version_of "$canonical")"
+    if [ -z "$have" ] || [ -z "$want" ]; then
+        echo "  Skipping stale-nvm re-point of $link: canonical $canonical is not an nvm node global."
+        return 0
+    fi
+    if ! version_lt "$have" "$want"; then
+        echo "  Skipping stale-nvm re-point of $link: its node v$have is not older than the canonical v$want."
+        return 0
+    fi
+    echo "Re-pointing $link from node v$have to the canonical claude on node v$want:"
+    echo "  $target -> $canonical"
+    ln -sfn "$canonical" "$link" \
+        || echo "WARNING: could not re-point $link; claude on PATH may stay on node v$have."
+}
+
 # Remove the official native-installer copy of claude so only the canonical
 # (npm/brew) binary remains. Guarded + idempotent + non-destructive to config:
 #   - acts only on a ~/.local/bin/claude that is a SYMLINK INTO
 #     ~/.local/share/claude/ (the native-installer layout); a convenience
 #     symlink to the canonical binary is left alone;
+#   - a symlink into an nvm node's npm global (<NVM_DIR>/versions/node/...)
+#     is never removed, only re-pointed at the canonical claude when that is
+#     on a newer node (see repoint_stale_nvm_link);
 #   - removes nothing unless a canonical claude OUTSIDE ~/.local is confirmed
 #     (so a failed install never leaves the user with no claude);
 #   - never touches ~/.claude/ (auth + settings live there).
@@ -144,8 +212,16 @@ cleanup_conflicting_installs() {
     [ -L "$native_link" ] || return 0
 
     local target; target="$(readlink "$native_link" 2>/dev/null || true)"
+    # A relative link target is relative to the link's own directory.
+    case "$target" in
+        /*|"") ;;
+        *) target="$(dirname "$native_link")/$target" ;;
+    esac
     case "$target" in
         */.local/share/claude/*) ;;          # native installer — candidate
+        */versions/node/*)                   # npm global of SOME nvm node (any NVM_DIR) — maybe stale
+            repoint_stale_nvm_link "$native_link" "$target"
+            return 0 ;;
         *) return 0 ;;                        # points elsewhere (e.g. canonical) — keep
     esac
 
