@@ -314,10 +314,11 @@ fi
 # never checked as code.
 GFF_DIRS='[.]config/gff|[.]local/share/gff'
 GFF_WRAPPERS='sudo|env|command|exec|eval|nohup|nice|timeout|xargs|setsid|stdbuf|doas|ssh|bash|sh|dash|zsh'
-# Paths are normalized first: a//b and a/./b name a/b.
+# Paths are normalized first: a//b, a/./b and a/x/../b name a/b.
 gff_norm() {
     local t="$1"
     while [[ "$t" == *//* || "$t" == */./* ]]; do t="${t//\/\//\/}"; t="${t//\/.\//\/}"; done
+    while [[ "$t" =~ ^(.*/)[^/[:space:]]+/[.][.]/(.*)$ ]]; do t="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"; done
     printf '%s' "$t"
 }
 # The command's parts, one per line.
@@ -338,7 +339,7 @@ gff_cmd_parts() {
                 '#')
                     # a comment, as bash reads one: # starting a word runs to
                     # the end of the line, quotes and all
-                    if [ "$i" -eq 0 ] || [[ "${s:i-1:1}" =~ [[:space:]\;\|\&\(] ]]; then
+                    if [ "$i" -eq 0 ] || [[ "${s:i-1:1}" =~ [[:space:]\;\|\&\(\)] ]]; then
                         while [ "$i" -lt "${#s}" ] && [ "${s:i:1}" != $'\n' ]; do i=$((i + 1)); done
                         out+=$'\n'
                     else
@@ -358,43 +359,60 @@ gff_cmd_parts() {
     gff_norm "$out"; echo
 }
 gff_guard() {
-    local seg w words n
+    local seg w words n prev k sub
     [[ "$CMD_GSS" == *gff* ]] || return 1
     while IFS= read -r seg; do
         read -ra words <<< "$seg"
         # the part's command word: past VAR=x assignments (one naming a gff
         # dir is refused: GIT_CONFIG_GLOBAL=<gff path> git config ...),
-        # keywords ({ ! time if then do ...) and leading redirections
-        n=0
+        # keywords ({ ! time -p if then do ...) and leading redirections
+        # (2>/dev/null, > /dev/null, </dev/null)
+        n=0; prev=""
         while [ "$n" -lt "${#words[@]}" ]; do
             case "${words[n]}" in
                 '{'|'!'|time|if|then|else|elif|do|while|until) ;;
-                [0-9]*'>'*|'>'*) ;;
+                -p) [ "$prev" = time ] || break ;;
+                [0-9]*[\<\>]|[\<\>]|[\<\>][\<\>\&]) n=$((n + 1)) ;;
+                [0-9]*[\<\>]*|[\<\>]*) ;;
                 *)
                     [[ "${words[n]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || break
                     [[ "${words[n]}" =~ $GFF_DIRS ]] && return 0 ;;
             esac
-            n=$((n + 1))
+            prev="${words[n]}"; n=$((n + 1))
         done
         w="${words[n]:-}"
         # a gff dir path is never a command, and never the gff reader
         [[ "$w" =~ $GFF_DIRS ]] && return 0
-        w="${w##*/}"
+        w="${w%%[<>]*}"; w="${w##*/}"
         # gff [flags] set|unset gss.approval-token...
         if [ "$w" = gff ] || { [[ "$w" =~ ^($GFF_WRAPPERS)$ ]] && [[ "$seg" =~ (^|[[:space:]/])gff[[:space:]] ]]; }; then
-            [[ "$seg" =~ gff[[:space:]]([^[:space:]]+[[:space:]]+)*(set|unset)[[:space:]].*gss[.]approval-token ]] && return 0
+            [[ "$seg" =~ gff([\<\>][^[:space:]]*)?[[:space:]]+([^[:space:]]+[[:space:]]+)*(set|unset)[[:space:]].*gss[.]approval-token ]] && return 0
         fi
         [[ "$seg" =~ $GFF_DIRS ]] || continue
         [[ "$seg" =~ \>[[:space:]]*[^[:space:]]*($GFF_DIRS) ]] && return 0
         case "$w" in
-            cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|ls|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|echo|printf|gff|gh) ;;
-            # readers that can also write: refused when a write flag takes a
-            # gff path, attached or not (git config -f<path>, git diff
-            # --output=, git archive -o, tree -o), git subcommands that write
-            # a named file (config, bundle, archive), and yq with -i at all
-            git|tree)
-                [[ "$seg" =~ [[:space:]](-[A-Za-z]*[fo]|--file|--output)(=|[[:space:]]*)[^[:space:]]*($GFF_DIRS) ]] && return 0
-                [[ "$w" = git && "${words[n+1]:-}" =~ ^(config|bundle|archive)$ ]] && return 0 ;;
+            cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|ls|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|echo|printf|gff) ;;
+            # readers that can also write are refused when they would:
+            # git with a write flag taking a gff path (config -f<path>, diff
+            # --output=, archive -o, format-patch --output-directory) or a
+            # subcommand that writes a named file (config, bundle, archive,
+            # format-patch); gh -O/--output/--dir to a gff path, or clone;
+            # tree -o; yq -i at all
+            git)
+                [[ "$seg" =~ [[:space:]](-[A-Za-z]*[fo]|--file|--output|--output-directory)(=|[[:space:]]*)[^[:space:]]*($GFF_DIRS) ]] && return 0
+                k=$((n + 1)); sub=""
+                while [ "$k" -lt "${#words[@]}" ]; do
+                    case "${words[k]}" in
+                        -C|-c) k=$((k + 2)) ;;
+                        -*) k=$((k + 1)) ;;
+                        *) sub="${words[k]}"; break ;;
+                    esac
+                done
+                [[ "$sub" =~ ^(config|bundle|archive|format-patch)$ ]] && return 0 ;;
+            gh)
+                [[ "$seg" =~ [[:space:]](-[A-Za-z]*[OD]|--output|--dir)(=|[[:space:]]*)[^[:space:]]*($GFF_DIRS) ]] && return 0
+                [[ "$seg" =~ [[:space:]]clone[[:space:]] ]] && return 0 ;;
+            tree) [[ "$seg" =~ [[:space:]](-[A-Za-z]*o|--output)(=|[[:space:]]*)[^[:space:]]*($GFF_DIRS) ]] && return 0 ;;
             yq) [[ "$seg" =~ [[:space:]](-[A-Za-z]*i[A-Za-z]*|--inplace|--in-place)([[:space:]]|=|$) ]] && return 0 ;;
             *) return 0 ;;
         esac

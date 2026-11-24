@@ -518,6 +518,21 @@ assert_exit 2 Bash "ssh pi1 gff set gss.approval-token.enabled false"  "gff set 
 assert_exit 2 Bash "ssh pi1 'gff unset gss.approval-token.enabled'"    "quoted gff unset over ssh is refused"
 assert_exit 2 Bash "eval gff set gss.approval-token.enabled false"     "gff set behind eval is refused"
 assert_exit 0 Bash $'ls -la \\\n ~/.config/gff'                       "a read split by a backslash-newline is fine"
+# agy review of beab93cc
+assert_exit 2 Bash "gff  set gss.approval-token.enabled false"         "gff set with two spaces is refused"
+assert_exit 2 Bash "</dev/null gff set gss.approval-token.enabled false" "gff set behind < is refused"
+assert_exit 2 Bash "> /dev/null gff set gss.approval-token.enabled false" "gff set behind a spaced > is refused"
+assert_exit 2 Bash "gff</dev/null set gss.approval-token.enabled false" "gff< attached, then set, is refused"
+assert_exit 2 Bash "time -p gff set gss.approval-token.enabled false"  "gff set behind time -p is refused"
+assert_exit 2 Bash "eval \"gff set gss.approval-token.enabled false\"" "gff set inside eval \"...\" is refused"
+assert_exit 2 Bash $'(true)# \'\ngff set gss.approval-token.enabled false' "a comment after ) does not hide the next line"
+assert_exit 2 Bash "rm ~/.config/gss/../gff/config.yaml"               "a ../ in the path is refused"
+assert_exit 2 Bash "git -C . bundle create ~/.config/gff/config.yaml HEAD" "git -C . bundle create onto it is refused"
+assert_exit 2 Bash "git format-patch --output-directory ~/.config/gff HEAD~1" "git format-patch into the gff dir is refused"
+assert_exit 2 Bash "gh release download -O ~/.config/gff/config.yaml"  "gh -O onto it is refused"
+assert_exit 2 Bash "gh repo clone o/r ~/.config/gff"                   "gh repo clone into the gff dir is refused"
+assert_exit 0 Bash "tree -f ~/.config/gff"                             "tree -f of the gff dir is fine"
+assert_exit 0 Bash "gh pr comment 1 --body \"the override is ~/.config/gff/config.yaml\"" "a gh comment naming the path is still fine"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"
