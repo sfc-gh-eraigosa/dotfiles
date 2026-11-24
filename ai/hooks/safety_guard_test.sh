@@ -535,6 +535,7 @@ assert_exit 2 Bash "git format-patch --output-directory ~/.config/gff HEAD~1" "g
 assert_exit 2 Bash "gh release download -O ~/.config/gff/config.yaml"  "gh -O onto it is refused"
 assert_exit 2 Bash "gh repo clone o/r ~/.config/gff"                   "gh repo clone into the gff dir is refused"
 assert_exit 0 Bash "tree -f ~/.config/gff"                             "tree -f of the gff dir is fine"
+assert_exit 0 Bash "[[ -f ~/.config/gff/config.yaml ]] && echo yes"   "[[ -f ]] on it is fine"
 # agy review of 895a1f61: backslash-newline joins words; not inside a comment
 assert_exit 2 Bash $'# \\\ngff set gss.approval-token.enabled false'   "a backslash at the end of a comment does not hide the next line"
 assert_exit 2 Bash $'echo ok # \\\nrm ~/.config/gff/config.yaml'       "a comment ending in a backslash does not hide an rm"

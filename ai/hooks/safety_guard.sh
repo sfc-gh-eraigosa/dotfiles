@@ -256,6 +256,8 @@ gss_token_required() {
 # path to the binary counts ($HOME/opt/bin/gss, ~/gss). Bash runs all of them
 # as gss. The verb may start after ( or a backtick and end at ; | & ) or a
 # backtick, as in { gss push; } or $(gss push).
+# Quotes are dropped, so while the flag is on, quoted text that names a
+# verb (grep "gss push", git log --grep "gss pr") also needs a fresh token.
 # $'...' and $"..." are quotes too: their $ goes with them.
 # A backslash-newline joins two lines into one word, as in bash (g\<nl>ss is
 # gss), except inside a # comment, where the next line runs on its own: a
@@ -411,7 +413,7 @@ gff_guard_text() {
         [[ "$seg" =~ $GFF_DIRS ]] || continue
         [[ "$seg" =~ \>[[:space:]]*[^[:space:]]*($GFF_DIRS) ]] && return 0
         case "$w" in
-            cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|ls|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|echo|printf|gff) ;;
+            cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|ls|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|'[['|echo|printf|gff) ;;
             # readers that can also write are refused when they would:
             # git with a write flag taking a gff path (config -f<path>, diff
             # --output=, archive -o, format-patch --output-directory) or a
