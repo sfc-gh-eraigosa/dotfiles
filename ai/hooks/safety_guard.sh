@@ -256,8 +256,10 @@ gss_token_required() {
 # path to the binary counts ($HOME/opt/bin/gss, ~/gss). Bash runs all of them
 # as gss. The verb may start after ( or a backtick and end at ; | & ) or a
 # backtick, as in { gss push; } or $(gss push).
-# $'...' and $"..." are quotes too: their $ goes with them.
-CMD_GSS="${CMD_SCRUBBED//\$\'/\'}"; CMD_GSS="${CMD_GSS//\$\"/\"}"
+# A backslash-newline joins two lines into one command, as in bash. $'...'
+# and $"..." are quotes too: their $ goes with them.
+CMD_JOINED="${CMD_SCRUBBED//\\$'\n'/ }"
+CMD_GSS="${CMD_JOINED//\$\'/\'}"; CMD_GSS="${CMD_GSS//\$\"/\"}"
 CMD_GSS="${CMD_GSS//[\"\'\\]/}"
 GSS_LEAD='(^|[[:space:];|&(`])'
 GSS_BIN='((/|~/|[$]HOME/|[$][{]HOME[}]/|[.][.]?/)([^[:space:];|&`]*/)?)?gss'
@@ -295,8 +297,8 @@ fi
 # Each part of the command (split at ; | & ( ) backticks and newlines) is
 # checked on its own:
 # - a part whose command is gff (also behind sudo, env, command, exec, nohup,
-#   nice, timeout, xargs, doas, or bash/sh/zsh -c) may not set or unset
-#   the flag, whatever flags come first;
+#   nice, timeout, xargs, eval, setsid, stdbuf, doas, ssh, or a shell -c)
+#   may not set or unset the flag, whatever flags come first;
 # - a part that names a gff dir must start with a read-only command, and
 #   nothing may redirect into a gff dir. That is an allowlist, not a list of
 #   writers: rm, mv, sed -i, chmod, unlink, cd-then-edit and anything not
@@ -311,7 +313,7 @@ fi
 # backslash is refused; pass it through a heredoc (-F - <<EOF), which is
 # never checked as code.
 GFF_DIRS='[.]config/gff|[.]local/share/gff'
-GFF_WRAPPERS='sudo|env|command|exec|nohup|nice|timeout|xargs|doas|bash|sh|zsh'
+GFF_WRAPPERS='sudo|env|command|exec|eval|nohup|nice|timeout|xargs|setsid|stdbuf|doas|ssh|bash|sh|dash|zsh'
 # Paths are normalized first: a//b and a/./b name a/b.
 gff_norm() {
     local t="$1"
@@ -320,7 +322,7 @@ gff_norm() {
 }
 # The command's parts, one per line.
 gff_cmd_parts() {
-    local s="$CMD_SCRUBBED" out="" q="" c i
+    local s="$CMD_JOINED" out="" q="" c i
     if [ "${#s}" -gt 4000 ] || [[ "$s" == *\\* || "$s" == *\$[\'\"\(]* || "$s" == *\`* ]]; then
         # strict: the quote-stripped command (as rule 10 sees it), split like code
         s="$(gff_norm "$CMD_GSS")"
@@ -374,7 +376,10 @@ gff_guard() {
             esac
             n=$((n + 1))
         done
-        w="${words[n]:-}"; w="${w##*/}"
+        w="${words[n]:-}"
+        # a gff dir path is never a command, and never the gff reader
+        [[ "$w" =~ $GFF_DIRS ]] && return 0
+        w="${w##*/}"
         # gff [flags] set|unset gss.approval-token...
         if [ "$w" = gff ] || { [[ "$w" =~ ^($GFF_WRAPPERS)$ ]] && [[ "$seg" =~ (^|[[:space:]/])gff[[:space:]] ]]; }; then
             [[ "$seg" =~ gff[[:space:]]([^[:space:]]+[[:space:]]+)*(set|unset)[[:space:]].*gss[.]approval-token ]] && return 0
@@ -385,7 +390,6 @@ gff_guard() {
             cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|ls|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|echo|printf|gff|gh) ;;
             # readers that can also write: refused when a write flag takes a
             # gff path, attached or not (git config -f<path>, git diff
-            # --output=, git archive -o, tree -o), and yq with -i at all
             # --output=, git archive -o, tree -o), git subcommands that write
             # a named file (config, bundle, archive), and yq with -i at all
             git|tree)

@@ -511,6 +511,13 @@ assert_exit 2 Bash $'# operator\'s flag\ngff unset gss.approval-token.enabled' "
 assert_exit 2 Bash "bash -c 'gff set gss.approval-token.enabled false'" "gff set inside bash -c is refused"
 assert_exit 2 Bash "doas gff set gss.approval-token.enabled false"     "gff set behind doas is refused"
 assert_exit 0 Bash "jq . < ~/.config/gff/config.yaml"                  "jq reading it on stdin is fine"
+# Claude review of beab93cc
+assert_exit 2 Bash $'gff set \\\n gss.approval-token.enabled false'   "gff set split by a backslash-newline is refused"
+assert_exit 2 Bash $'rm -rf \\\n ~/.config/gff'                       "rm split by a backslash-newline is refused"
+assert_exit 2 Bash "ssh pi1 gff set gss.approval-token.enabled false"  "gff set over ssh is refused"
+assert_exit 2 Bash "ssh pi1 'gff unset gss.approval-token.enabled'"    "quoted gff unset over ssh is refused"
+assert_exit 2 Bash "eval gff set gss.approval-token.enabled false"     "gff set behind eval is refused"
+assert_exit 0 Bash $'ls -la \\\n ~/.config/gff'                       "a read split by a backslash-newline is fine"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"
