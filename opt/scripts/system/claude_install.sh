@@ -127,6 +127,31 @@ resolve_canonical_claude() {
     return 0
 }
 
+# Re-point a ~/.local/bin/claude symlink that targets the npm global of an
+# OLDER nvm node (e.g. .../node/v24.16.0/lib/node_modules/...). `npm update -g`
+# only updates the CURRENT node's global, and ~/.local/bin precedes nvm on
+# PATH, so such a link silently pins claude to the old version forever (seen on
+# a Pi: link -> v24.16.0 at 2.1.191 while v24.18.0 held 2.1.330). Re-pointing
+# (not removing) keeps the path working for non-interactive ssh shells that
+# never load nvm. Left alone when the link already lives under the canonical
+# prefix, or when no canonical binary is confirmed.
+repoint_stale_nvm_link() {
+    local link="$1" target="$2"
+    local canonical; canonical="$(resolve_canonical_claude)"
+    if [ -z "$canonical" ] || [ ! -x "$canonical" ]; then
+        return 0
+    fi
+    case "$canonical" in
+        "$HOME/.local/"*) return 0 ;;
+    esac
+    local prefix="${canonical%/bin/claude}"
+    case "$target" in
+        "$prefix"/*|"$canonical") return 0 ;;  # already current
+    esac
+    echo "Re-pointing stale $link (was -> $target) to the current npm global: $canonical"
+    ln -sfn "$canonical" "$link"
+}
+
 # Remove the official native-installer copy of claude so only the canonical
 # (npm/brew) binary remains. Guarded + idempotent + non-destructive to config:
 #   - acts only on a ~/.local/bin/claude that is a SYMLINK INTO
@@ -146,6 +171,9 @@ cleanup_conflicting_installs() {
     local target; target="$(readlink "$native_link" 2>/dev/null || true)"
     case "$target" in
         */.local/share/claude/*) ;;          # native installer — candidate
+        */.nvm/versions/node/*)              # npm global of SOME nvm node — maybe stale
+            repoint_stale_nvm_link "$native_link" "$target"
+            return 0 ;;
         *) return 0 ;;                        # points elsewhere (e.g. canonical) — keep
     esac
 

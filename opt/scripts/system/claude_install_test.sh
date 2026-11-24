@@ -56,6 +56,22 @@ assert_in_subshell "keeps a convenience symlink that points at the canonical bin
 assert_in_subshell "no-op when there is no native install" \
     "H=\$(mktemp -d); export HOME=\"\$H\"; mkdir -p \"\$H/.local/bin\"; export CLAUDE_CANONICAL_BIN=\"\$H/realbin/claude\"; . '$SCRIPT'; cleanup_conflicting_installs >/dev/null 2>&1"
 
+# 5b) Link into an OLDER nvm node's npm global => re-pointed at the canonical binary.
+mk_nvm='H=$(mktemp -d); export HOME="$H";
+  mkdir -p "$H/.local/bin" "$H/.nvm/versions/node/v1.0.0/lib/node_modules/@anthropic-ai/claude-code/bin" "$H/.nvm/versions/node/v2.0.0/bin";
+  old="$H/.nvm/versions/node/v1.0.0/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe"; : > "$old"; chmod +x "$old";
+  new="$H/.nvm/versions/node/v2.0.0/bin/claude"; : > "$new"; chmod +x "$new";'
+assert_in_subshell "re-points a link pinned to an older nvm node at the canonical binary" \
+    "$mk_nvm ln -s \"\$old\" \"\$H/.local/bin/claude\"; export CLAUDE_CANONICAL_BIN=\"\$new\"; . '$SCRIPT'; cleanup_conflicting_installs >/dev/null 2>&1; [ \"\$(readlink \"\$H/.local/bin/claude\")\" = \"\$new\" ]"
+
+# 5c) Link already inside the current nvm node's prefix => untouched.
+assert_in_subshell "keeps a link already inside the current nvm prefix" \
+    "$mk_nvm cur=\"\$H/.nvm/versions/node/v2.0.0/lib/node_modules/x/claude.exe\"; mkdir -p \"\${cur%/*}\"; : > \"\$cur\"; ln -s \"\$cur\" \"\$H/.local/bin/claude\"; export CLAUDE_CANONICAL_BIN=\"\$new\"; . '$SCRIPT'; cleanup_conflicting_installs >/dev/null 2>&1; [ \"\$(readlink \"\$H/.local/bin/claude\")\" = \"\$cur\" ]"
+
+# 5d) Stale nvm link but no canonical confirmed => untouched.
+assert_in_subshell "keeps a stale nvm link when no canonical is confirmed" \
+    "$mk_nvm ln -s \"\$old\" \"\$H/.local/bin/claude\"; export CLAUDE_CANONICAL_BIN=\"\$H/nope/claude\"; . '$SCRIPT'; cleanup_conflicting_installs >/dev/null 2>&1; [ \"\$(readlink \"\$H/.local/bin/claude\")\" = \"\$old\" ]"
+
 # 6) resolve_canonical_claude honors the override.
 assert_in_subshell "resolve_canonical_claude honors CLAUDE_CANONICAL_BIN" \
     "export CLAUDE_CANONICAL_BIN=/opt/x/claude; . '$SCRIPT'; [ \"\$(resolve_canonical_claude)\" = /opt/x/claude ]"
