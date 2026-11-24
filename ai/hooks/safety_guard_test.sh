@@ -343,7 +343,35 @@ done
   assert_exit 0 Bash "gss push"            "gff flag off (the default): gss push runs" )
 ( export GSS_REQUIRE_APPROVAL=on PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
   assert_exit 2 Bash "gss push"            "GSS_REQUIRE_APPROVAL=on beats a gff off" )
+# gss spelled another way is still gss (#472): with the check on and no token,
+# each is blocked; paths and words that only contain "gss" are not.
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash '"gss" push'                          'quoted "gss" push is gated'
+  assert_exit 2 Bash '\gss push'                           'backslashed \gss push is gated'
+  assert_exit 2 Bash 'g"s"s feature merged'                'split quotes g"s"s feature merged is gated'
+  assert_exit 2 Bash '$HOME/opt/bin/gss feature pr --ready' '$HOME path to gss is gated'
+  # shellcheck disable=SC2088 # the literal ~ is the command text under test
+  assert_exit 2 Bash '~/opt/bin/gss feature restack'       '~ path to gss is gated'
+  assert_exit 2 Bash '/usr/local/bin/gss sync'             'absolute path to gss is gated'
+  assert_exit 2 Bash 'gss feature pr "--ready"'            'quoted --ready is gated'
+  assert_exit 2 Bash 'XDG_DATA_HOME=/x "gss" feature pr --ready' 'env prefix plus quoted gss is gated'
+  assert_exit 0 Bash 'git add sdk/gss'                     'a repo path ending in gss is not a gss command'
+  assert_exit 0 Bash 'ls ~/opt/bin/gss'                    'naming the gss binary is not running it'
+  assert_exit 0 Bash 'cd sdk/gss && go test ./...'         'cd into a gss dir is not a gss command' )
 rm -rf "$GFF_STUB"
+
+# The approval flag is the operator's (#472): an assistant may read it, never
+# set, unset or edit it. Independent of the flag's value.
+assert_exit 2 Bash "gff set gss.approval-token.enabled false"           "gff set of the approval flag is refused"
+assert_exit 2 Bash "gff unset gss.approval-token.enabled"               "gff unset of the approval flag is refused"
+assert_exit 2 Bash "\$HOME/opt/bin/gff set gss.approval-token.enabled true" "gff by path, set of the approval flag is refused"
+assert_exit 2 Bash "echo 'x: 1' >> ~/.config/gff/config.yaml"            "appending to the gff override file is refused"
+assert_exit 2 Bash "sed -i 's/true/false/' ~/.config/gff/config.yaml"   "sed -i on the gff override file is refused"
+assert_exit 2 Bash "rm ~/.config/gff/config.yaml"                       "removing the gff override file is refused"
+assert_exit 0 Bash "gff get gss.approval-token.enabled"                 "reading the approval flag is fine"
+assert_exit 0 Bash "gff enabled gss.approval-token.enabled"             "asking whether the approval flag is on is fine"
+assert_exit 0 Bash "cat ~/.config/gff/config.yaml"                      "reading the gff override file is fine"
+assert_exit 0 Bash "gff set herdr.theme dark"                           "gff set of another flag is fine"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"

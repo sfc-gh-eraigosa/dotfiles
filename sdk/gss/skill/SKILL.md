@@ -48,6 +48,10 @@ This skill provides a structured and safe workflow for managing Git repositories
 > the gated verbs below run directly: no token, no handshake. Everything else
 > stays: reviews, CI, the privacy hooks and the hooksPath check. The rest of
 > this section applies when the flag is on.
+> The flag is the operator's, like the token: an assistant never sets, unsets
+> or edits it (the safety_guard hook refuses). gss asks gff with only HOME (from
+> the password database) and a fixed PATH, so a command's own PATH, HOME or
+> XDG settings cannot make gff fail and read as off.
 > Turning it on from outside the dotfiles checkout needs the new key in gff's
 > registered snapshot: run `./install.sh` (it re-runs `gff install`) after
 > pulling, then `gff set gss.approval-token.enabled true`.

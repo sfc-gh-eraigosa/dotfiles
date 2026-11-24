@@ -248,10 +248,15 @@ gss_token_required() {
     esac
     command -v gff >/dev/null 2>&1 && gff enabled gss.approval-token.enabled >/dev/null 2>&1
 }
-if { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
-   || [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
-   || { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+pr([[:space:]]|$) ]] \
-        && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; } && gss_token_required; then
+# The gate also sees gss spelled another way (#472): quotes and backslashes
+# are dropped first ("gss", \gss, g"s"s), and an absolute, ~ or $HOME path to
+# the binary counts ($HOME/opt/bin/gss). Bash runs all of them as gss.
+CMD_GSS="${CMD_SCRUBBED//[\"\'\\]/}"
+GSS_VERB_ANY="(^|[[:space:];|&(])((/|~/|[\$]HOME/|[\$][{]HOME[}]/)[^[:space:];|&]*/)?gss${GSS_GLOBAL_FLAGS}[[:space:]]+"
+if { [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}(push|pr|sync)([[:space:]]|$) ]] \
+   || [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
+   || { [[ "$CMD_GSS" =~ ${GSS_VERB_ANY}feature[[:space:]]+pr([[:space:]]|$) ]] \
+        && [[ "$CMD_GSS" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; } && gss_token_required; then
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
         deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."
@@ -270,6 +275,18 @@ if { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
             deny "gss approval token is stale: token holds ${TOKEN_HEAD:-<empty>} but HEAD of ${GSS_EFFECTIVE_DIR} is ${CURRENT_HEAD} (target repo resolved from ${GSS_EFFECTIVE_SRC}). Re-confirm with the user and regenerate it from THAT repo: \`git -C '${GSS_EFFECTIVE_DIR}' rev-parse HEAD > ~/.config/gss/approval.token\`."
         fi
     fi
+fi
+
+# --- 10b. the approval flag is the operator's (#472) ---
+# Like the token, gss.approval-token.enabled is set by the operator, never by
+# an assistant: refuse `gff set|unset` of the key and writes to the gff user
+# override file. Reading the flag (gff get/enabled/list) stays free.
+GFF_FLAG_WRITE='(^|[[:space:];|&(/])gff[[:space:]]+(set|unset)[[:space:]][^;|&]*gss[.]approval-token'
+GFF_FILE='[.]config/gff/config[.]ya?ml'
+GFF_FILE_WRITE='(>|(^|[[:space:];|&])(tee|mv|cp|rm|truncate|ln|install)[[:space:]]|sed[[:space:]]+(-[a-zA-Z]*[[:space:]]+)*-[a-zA-Z]*i|perl[[:space:]]+-[a-zA-Z]*i)'
+if [[ "$CMD_GSS" =~ $GFF_FLAG_WRITE ]] \
+   || { [[ "$CMD_GSS" =~ $GFF_FILE ]] && [[ "$CMD_GSS" =~ $GFF_FILE_WRITE ]]; }; then
+    deny "gss.approval-token.enabled is the operator's switch, like the approval token: an assistant never sets, unsets or edits it. Ask the operator to run it themselves (\`! gff set gss.approval-token.enabled <true|false>\`)."
 fi
 
 # --- 11. gss feature checkpoint outside a worker worktree ---
