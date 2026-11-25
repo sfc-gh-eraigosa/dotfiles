@@ -90,6 +90,21 @@ func stmt(st *syntax.Stmt, depth int, out *[]string) {
 			// bash runs the statements before a syntax error, and so do we
 			_ = lines(inner, depth+1, out)
 		}
+		if _, simple := st.Cmd.(*syntax.CallExpr); !simple && st.Cmd != nil && len(st.Redirs) > 0 {
+			// ( bash ) <<E, { bash; } <<<x: the commands inside read that stdin
+			syntax.Walk(st.Cmd, func(n syntax.Node) bool {
+				if call, ok := n.(*syntax.CallExpr); ok {
+					var ws []string
+					for _, w := range call.Args {
+						ws = append(ws, word(w))
+					}
+					for _, inner := range nested(ws, st.Redirs) {
+						_ = lines(inner, depth+1, out)
+					}
+				}
+				return true
+			})
+		}
 	}
 }
 
@@ -157,7 +172,7 @@ func skipWrappers(words []string) (int, []string) {
 		}
 		i++
 		splitAt := func(v string, rest []string) (int, []string) {
-			line := v
+			line := "env " + strings.ReplaceAll(v, `\_`, " ")
 			for _, w := range rest {
 				line += " " + shQuote(w)
 			}
@@ -216,23 +231,52 @@ func shQuote(s string) string {
 }
 
 // nested returns the shell scripts a command hands to another shell: the -c
-// script of bash/sh/dash/zsh/ksh (else its heredoc or here-string), eval's
-// arguments, the remote command of ssh, and env -S's string, after any
-// wrappers.
+// script of bash/sh/dash/zsh/ksh (else its heredoc or here-string), what
+// source or . reads from stdin, eval's arguments, the remote command of
+// ssh, and the command env -S builds, after any wrappers. redirs are the
+// command's own redirections and those of a ( ) or { } around it.
 func nested(words []string, redirs []*syntax.Redirect) []string {
 	i, split := skipWrappers(words)
+	if split != nil {
+		// env -S: the command env runs after its split options, as a line of
+		// its own, and what that command reads from the stdin it inherits
+		ws := splitWords(split[0])
+		var out []string
+		if k, again := skipWrappers(ws); again == nil && k < len(ws) {
+			line := shQuote(ws[k])
+			for _, w := range ws[k+1:] {
+				line += " " + shQuote(w)
+			}
+			out = append(out, line)
+		}
+		if out == nil {
+			return nested(ws, redirs)
+		}
+		// the line is parsed again on its own; add only what stdin gives
+		base := nested(ws, nil)
+		for _, s := range nested(ws, redirs) {
+			if !slices.Contains(base, s) {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
 	if i >= len(words) {
-		return split
+		return nil
 	}
 	args := words[i+1:]
 	switch path.Base(words[i]) {
 	case "bash", "sh", "dash", "zsh", "ksh":
-		return append(split, shellScripts(args, redirs)...)
+		return shellScripts(args, redirs)
+	case "source", ".":
+		if len(args) > 0 && isStdin(args[0]) {
+			return stdinScripts(redirs)
+		}
 	case "eval":
 		if len(args) > 0 && args[0] == "--" {
 			args = args[1:]
 		}
-		return append(split, strings.Join(args, " "))
+		return []string{strings.Join(args, " ")}
 	case "ssh":
 		j := 0
 		for j < len(args) && strings.HasPrefix(args[j], "-") {
@@ -246,19 +290,39 @@ func nested(words []string, redirs []*syntax.Redirect) []string {
 			}
 		}
 		if j+1 < len(args) {
-			return append(split, strings.Join(args[j+1:], " "))
+			return []string{strings.Join(args[j+1:], " ")}
 		}
 	}
-	return split
+	return nil
 }
 
-// stdinPath names the script file operands that are the shell's own stdin.
-var stdinPath = map[string]bool{"/dev/stdin": true, "/dev/fd/0": true, "/proc/self/fd/0": true}
+// splitWords is the words of the first simple command in line.
+func splitWords(line string) []string {
+	var words []string
+	_ = syntax.NewParser(syntax.Variant(syntax.LangBash)).Stmts(strings.NewReader(line), func(st *syntax.Stmt) bool {
+		if call, ok := st.Cmd.(*syntax.CallExpr); ok {
+			for _, w := range call.Args {
+				words = append(words, word(w))
+			}
+		}
+		return false
+	})
+	return words
+}
+
+// isStdin reports whether a script file operand is the shell's own stdin.
+func isStdin(p string) bool {
+	switch path.Clean(p) {
+	case "/dev/stdin", "/dev/fd/0", "/proc/self/fd/0":
+		return true
+	}
+	return false
+}
 
 // shellScripts is what a shell runs from its arguments and redirections:
 // the first operand after its options when one of them has c; else, when
-// there is no script file operand (or -s says read stdin), the body of its
-// heredoc or here-string.
+// there is no script file operand (or -s, or the operand is stdin), the
+// body of its heredoc or here-string.
 func shellScripts(args []string, redirs []*syntax.Redirect) []string {
 	c, s, j := false, false, 0
 options:
@@ -270,8 +334,6 @@ options:
 			break options
 		case len(a) < 2 || (a[0] != '-' && a[0] != '+'):
 			break options
-		case a == "-o" || a == "+o" || a == "-O" || a == "+O":
-			j++
 		case a == "--rcfile" || a == "--init-file":
 			j++
 		case !strings.HasPrefix(a, "--"):
@@ -279,9 +341,8 @@ options:
 				c = c || strings.ContainsRune(a, 'c')
 				s = s || strings.ContainsRune(a, 's')
 			}
-			if strings.ContainsAny(a[1:], "oO") {
-				j++ // -eo pipefail: the option name
-			}
+			// each o / O takes an option name: -eo pipefail, -oo a b
+			j += strings.Count(a[1:], "o") + strings.Count(a[1:], "O")
 		}
 	}
 	if c {
@@ -290,9 +351,14 @@ options:
 		}
 		return nil
 	}
-	if j < len(args) && !s && !stdinPath[args[j]] {
+	if j < len(args) && !s && !isStdin(args[j]) {
 		return nil // stdin is the script's data, not a script
 	}
+	return stdinScripts(redirs)
+}
+
+// stdinScripts is the body of each heredoc and here-string in redirs.
+func stdinScripts(redirs []*syntax.Redirect) []string {
 	var docs []string
 	for _, r := range redirs {
 		switch {

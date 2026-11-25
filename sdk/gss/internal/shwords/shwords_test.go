@@ -88,6 +88,16 @@ func TestLines(t *testing.T) {
 		{"xargs -i takes no next word", "xargs -i bash -c 'gss push'", []string{"xargs -i bash -c gss_push", "gss push"}},
 		{"$'\\<nl>' keeps its backslash", "bash -c $'g\\\nss push'", []string{`bash -c g\_ss_push`, "gss push"}},
 		{"unknown $'\\q' keeps its backslash", "echo $'\\q'", []string{`echo \q`}},
+		// reviews of #475 (dd5057e7)
+		{"env -S bash heredoc", "env -S bash <<'E'\ngss push\nE\n", []string{"env -S bash <<E", "bash", "gss push"}},
+		{"env -S with env options", "env -S '-i bash -c' 'gss push'", []string{"env -S -i_bash_-c gss_push", "bash -c gss_push", "gss push"}},
+		{"env -S \\_ is a space", `env -S 'gss\_push'`, []string{`env -S gss\_push`, "gss push"}},
+		{"bash -oo a b", "bash -oo pipefail errexit -c 'gss push'", []string{"bash -oo pipefail errexit -c gss_push", "gss push"}},
+		{"bash /dev/./stdin", "bash /dev/./stdin <<'E'\ngss push\nE\n", []string{"bash /dev/stdin <<E", "gss push"}},
+		{"source /dev/stdin", "source /dev/stdin <<'E'\ngss push\nE\n", []string{"source /dev/stdin <<E", "gss push"}},
+		{". /dev/fd/0 here-string", ". /dev/fd/0 <<< 'gss push'", []string{". /dev/fd/0 <<<gss_push", "gss push"}},
+		{"( bash ) heredoc", "(bash) <<'E'\ngss push\nE\n", []string{"<<E", "gss push", "bash"}},
+		{"{ bash; } here-string", "{ bash; } <<< 'gss push'", []string{"<<<gss_push", "gss push", "bash"}},
 		{"bash -s reads stdin", "bash -s x <<'IN'\ngss push\nIN\n", []string{"bash -s x <<IN", "gss push"}},
 		{"message text is one word", `git commit -m "gss push; gff set x"`, []string{"git commit -m gss_push_gff_set_x"}},
 	}

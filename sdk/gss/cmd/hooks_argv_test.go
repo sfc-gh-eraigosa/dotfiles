@@ -30,6 +30,7 @@ func TestHooksArgv(t *testing.T) {
 		t.Fatalf("unparsable: exit %d, want 2", code)
 	}
 	argvFormat = "json"
+	t.Cleanup(func() { argvFormat = "lines" })
 	if _, code := runArgv(t, "gss push"); code != 2 {
 		t.Fatalf("unknown format: exit %d, want 2", code)
 	}

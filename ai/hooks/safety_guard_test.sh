@@ -620,10 +620,20 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     assert_exit 2 Bash "sudo FOO=bar bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: sudo NAME=v bash -c is read'
     assert_exit 2 Bash "xargs -i bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: xargs -i takes no next word'
     assert_exit 2 Bash "echo ' # ' && bash -c \$'g\\"$'\n'"ff set gss.approval-token.enabled false'" "parsed: \$'g\\<nl>ff' keeps its backslash"
-    assert_exit 0 Bash $'echo ok\nfi' 'parsed: a benign command with a syntax error (argv exit 2) passes' )
-  # a gss too old for --format: argv exits 1, the text check stands alone
+    assert_exit 0 Bash $'echo ok\nfi' 'parsed: a benign command with a syntax error (argv exit 2) passes'
+    # reviews of #475 (dd5057e7)
+    assert_exit 2 Bash $'env -S bash <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: env -S bash reads its heredoc'
+    assert_exit 2 Bash "env -S '-i bash -c' \$'\\x67ff set gss.approval-token.enabled false'" "parsed: env -S's own env options"
+    assert_exit 2 Bash "env -S 'gff\\_set\\_gss.approval-token.enabled\\_false'" "parsed: env -S's \\_ is a space"
+    assert_exit 2 Bash "bash -oo pipefail errexit -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: bash -oo takes two option names'
+    assert_exit 2 Bash $'bash /dev/./stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: /dev/./stdin is stdin'
+    assert_exit 2 Bash $'source /dev/stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: source /dev/stdin reads its heredoc'
+    assert_exit 2 Bash $'(bash) <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: ( bash ) reads the heredoc around it'
+    assert_exit 2 Bash $'{ bash; } <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: { bash; } reads the heredoc around it' )
+  # a gss too old for --format: argv exits 1, the text check stands alone and
+  # whatever it printed is dropped
   OLD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-oldgss.XXXXXX")"
-  printf '#!/bin/sh\necho "unknown flag: --format" >&2\nexit 1\n' > "$OLD_DIR/gss"; chmod +x "$OLD_DIR/gss"
+  printf '#!/bin/sh\necho "gff set gss.approval-token.enabled false"\necho "unknown flag: --format" >&2\nexit 1\n' > "$OLD_DIR/gss"; chmod +x "$OLD_DIR/gss"
   printf '#!/bin/sh\nexit 0\n' > "$OLD_DIR/gff"; chmod +x "$OLD_DIR/gff"
   ( unset GSS_REQUIRE_APPROVAL; export PATH="$OLD_DIR:$PATH" HOME="$OLD_DIR/home"
     assert_exit 2 Bash 'gff set gss.approval-token.enabled false' 'old gss: the text check still refuses gff set'
