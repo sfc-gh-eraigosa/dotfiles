@@ -23,7 +23,7 @@ func runArgv(t *testing.T, in string) (string, int) {
 }
 
 func TestHooksArgv(t *testing.T) {
-	if out, code := runArgv(t, "g\\\nss push; bash -c 'gff set k v'"); code != -1 || out != "gss push\nbash -c gff set k v\ngff set k v\n" {
+	if out, code := runArgv(t, "g\\\nss push; bash -c 'gff set k v'"); code != -1 || out != "gss push\nbash -c gff_set_k_v\ngff set k v\n" {
 		t.Fatalf("got exit %d, %q", code, out)
 	}
 	if _, code := runArgv(t, `echo "open`); code != 2 {

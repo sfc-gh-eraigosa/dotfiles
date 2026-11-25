@@ -295,12 +295,14 @@ gss_publish_verb() {
 # resolved, $'...' decoded, paths cleaned, redirections glued to their
 # targets, and the strings given to bash -c, eval, ssh or a heredoc fed to a
 # shell parsed again. Rules 10 and 10b check these lines as well as the text,
-# so the parse only adds refusals. With no gss on PATH, a gss too old to know
-# argv (it rejects --format), or a command that does not parse, CMD_PARSED is
-# empty and the text match stands alone.
+# so the parse only adds refusals. On a syntax error argv exits 2 after the
+# lines of the statements before it, which bash would run, and those are
+# kept. With no gss on PATH or a gss too old to know argv (it rejects
+# --format, exit 1), CMD_PARSED is empty and the text match stands alone.
 CMD_PARSED=""
 if command -v gss > /dev/null 2>&1; then
-    CMD_PARSED="$(printf '%s' "$CMD" | gss hooks argv --format=lines 2> /dev/null)" || CMD_PARSED=""
+    CMD_PARSED="$(printf '%s' "$CMD" | gss hooks argv --format=lines 2> /dev/null)"
+    case $? in 0 | 2) ;; *) CMD_PARSED="" ;; esac
 fi
 gss_publish_parsed() {
     local l

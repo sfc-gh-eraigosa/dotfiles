@@ -588,6 +588,16 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     assert_exit 2 Bash '2>> /dev/null gff set gss.approval-token.enabled false' 'parsed: a leading 2>> does not hide gff set'
     assert_exit 2 Bash '<<< x gff set gss.approval-token.enabled false' 'parsed: a leading <<< does not hide gff set'
     assert_exit 2 Bash 'env gff</dev/null set gss.approval-token.enabled false' 'parsed: env gff< set is refused'
+    # reviews of #475 (764972c4)
+    assert_exit 2 Bash $'bash <<\'EOF\'\nset -e\ngff set gss.approval-token.enabled false\nEOF' 'parsed: a multi-line heredoc fed to bash keeps its lines'
+    assert_exit 0 Bash $'bash <<\'EOF\'\nset -e\ncat ~/.config/gff/config.yaml\nEOF' 'parsed: a heredoc script that reads the gff file is fine'
+    assert_exit 2 Bash "bash -c \$'\\x67ff set gss.approval-token.enabled false # a/../../b'" 'parsed: a path in a bash -c script does not erase it'
+    assert_exit 2 Bash $'echo \\\\\ngff set gss.approval-token.enabled false\nfi' 'parsed: a later syntax error does not drop the lines before it'
+    assert_exit 2 Bash "\$'\\u0067ff' set gss.approval-token.enabled false" "parsed: \$'\\u0067ff' set is refused"
+    assert_exit 2 Bash "\$'gff\\0x' set gss.approval-token.enabled false" "parsed: \$'gff\\0x' (NUL ends it) is refused"
+    assert_exit 2 Bash "bash <<< \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: a here-string fed to bash is read'
+    assert_exit 2 Bash "env bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env bash -c is read'
+    assert_exit 2 Bash 'env "X=a cat" rm ~/.config/gff/config.yaml' 'parsed: a quoted space in an env arg is not the command'
     assert_exit 0 Bash 'gh pr comment 1 --body "x > ~/.config/gff/config.yaml"' 'parsed: a > inside a message is text'
     assert_exit 0 Bash 'git commit -m "gff set gss.approval-token.enabled false is refused"' 'parsed: a commit message naming gff set is text' )
 else
