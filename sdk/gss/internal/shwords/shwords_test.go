@@ -136,6 +136,10 @@ func TestLines(t *testing.T) {
 		{"cat - heredoc", "cat - <<E | bash\ngss push\nE\n", []string{"gss push", "cat - <<E", "bash"}},
 		{"env -S -a 1=2", "env -S '-a 1=2 gss push'", []string{"env -S -a_1=2_gss_push", "gss push"}},
 		{"env -S splits on CR", "env -S 'gss\rpush'", []string{"env -S gss_push", "gss push"}},
+		// review of #475 (932acf3d): pass-through stages
+		{"echo | cat | bash", "echo 'gss push' | cat | bash", []string{"gss push", "echo gss_push", "cat", "bash"}},
+		{"echo | tee log | bash", "echo 'gss push' | tee log | bash", []string{"gss push", "echo gss_push", "tee log", "bash"}},
+		{"echo | cat file | bash is the file", "echo 'gss push' | cat f | bash", []string{"echo gss_push", "cat f", "bash"}},
 		{"bash -s reads stdin", "bash -s x <<'IN'\ngss push\nIN\n", []string{"bash -s x <<IN", "gss push"}},
 		{"message text is one word", `git commit -m "gss push; gff set x"`, []string{"git commit -m gss_push_gff_set_x"}},
 	}
@@ -262,5 +266,38 @@ func TestHeredocBodies(t *testing.T) {
 		if got := heredoc(f.Stmts[0].Redirs[0]); got != want {
 			t.Errorf("heredoc(%q) = %q, want %q", src, got, want)
 		}
+	}
+}
+
+// printf as bash prints it (review of #475, 932acf3d): escapes in the
+// format, precision, and a bound on what a repeating format produces.
+func TestPrintfText(t *testing.T) {
+	cases := []struct {
+		format string
+		args   []string
+		want   string
+	}{
+		{`\x67ss push`, nil, "gss push"},
+		{`gss\x20push`, nil, "gss push"},
+		{`gss push`, nil, "gss push"},
+		{`\147ss push`, nil, "gss push"},
+		{`%.3s push`, []string{"gssxyz"}, "gss push"},
+		{`%s %s\n`, []string{"gss", "push", "a", "b"}, "gss push\na b\n"},
+		{`%b`, []string{`\0147ss push`}, "gss push"},
+		{`100%% %s`, []string{"x"}, "100% x"},
+	}
+	for _, c := range cases {
+		if got := printfText(c.format, c.args); got != c.want {
+			t.Errorf("printfText(%q, %q) = %q, want %q", c.format, c.args, got, c.want)
+		}
+	}
+	big := strings.Repeat("a", 500<<10) + "%s"
+	args := slices.Repeat([]string{"x"}, 1000)
+	start := time.Now()
+	if got := printfText(big, args); len(got) > maxPrinted {
+		t.Errorf("printfText grew to %d bytes, want at most %d", len(got), maxPrinted)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("printfText took %v on a repeating 500 KB format", d)
 	}
 }

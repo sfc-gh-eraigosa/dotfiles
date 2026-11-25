@@ -510,14 +510,21 @@ func pipedScript(b *syntax.BinaryCmd) []string {
 	if !ok || !readsScriptFromStdin(callWords(right)) {
 		return nil
 	}
-	// a | b | bash parses as (a | b) | bash: the producer is the last stage
-	x := b.X
-	for {
+	// a | b | bash parses as (a | b) | bash: the producer is the last stage,
+	// or the one before a stage that passes its stdin on (cat, tee)
+	var stages []*syntax.Stmt
+	for x := b.X; ; {
 		inner, ok := x.Cmd.(*syntax.BinaryCmd)
 		if !ok || (inner.Op != syntax.Pipe && inner.Op != syntax.PipeAll) {
+			stages = append(stages, x)
 			break
 		}
-		x = inner.Y
+		stages = append(stages, inner.Y)
+		x = inner.X
+	}
+	x := stages[0]
+	for k := 0; k+1 < len(stages) && passesStdin(stages[k]); k++ {
+		x = stages[k+1]
 	}
 	left, ok := x.Cmd.(*syntax.CallExpr)
 	if !ok {
@@ -584,41 +591,44 @@ func echoEscapes(s string) string {
 	return b.String()
 }
 
+// maxPrinted bounds what printfText produces: the hook's input is at most
+// 1 MiB, and a format that repeats must not grow past that.
+const maxPrinted = 1 << 20
+
 // printfText is what printf FORMAT ARGS... prints, for the conversions a
-// script could hide in: %s and %b (with echo -e escapes) take the next
-// argument, %% is %, any other conversion takes an argument as is, and the
-// format repeats while arguments are left, as bash's printf does.
+// script could hide in: the text between conversions with bash's printf
+// escapes (\xHH, \uHHHH, \NNN, as $'...'), %s and %b (with echo -e escapes)
+// taking the next argument cut to any precision (%.3s), %% as %, any other
+// conversion taking an argument as is, and the format repeating while
+// arguments are left, as bash's printf does. The output stops at maxPrinted.
 func printfText(format string, args []string) string {
 	var b strings.Builder
-	for pass := 0; pass == 0 || (len(args) > 0 && pass < 1000); pass++ {
+	for pass := 0; pass == 0 || len(args) > 0; pass++ {
 		used := false
-		for i := 0; i < len(format); i++ {
-			c := format[i]
-			if c == '\\' {
-				j := i + 1
-				for j < len(format) && j < i+4 && format[j] >= '0' && format[j] <= '7' {
-					j++
-				}
-				if j == i+1 && j < len(format) {
-					j++
-				}
-				b.WriteString(echoEscapes(format[i:j]))
-				i = j - 1
+		lit := 0
+		for i := 0; i < len(format) && b.Len() < maxPrinted; i++ {
+			if format[i] != '%' || i+1 == len(format) {
 				continue
 			}
-			if c != '%' || i+1 == len(format) {
-				b.WriteByte(c)
-				continue
-			}
+			b.WriteString(ansiC(format[lit:i]))
 			j := i + 1
-			for j < len(format) && strings.IndexByte("-+ #0123456789.*", format[j]) >= 0 {
+			for j < len(format) && strings.IndexByte("-+ #0123456789*", format[j]) >= 0 {
 				j++
 			}
+			prec := -1
+			if j < len(format) && format[j] == '.' {
+				j++
+				k := j
+				for j < len(format) && format[j] >= '0' && format[j] <= '9' {
+					j++
+				}
+				prec, _ = strconv.Atoi(format[k:j])
+			}
 			if j == len(format) {
-				b.WriteString(format[i:])
+				lit = i
 				break
 			}
-			i = j
+			i, lit = j, j+1
 			if format[j] == '%' {
 				b.WriteByte('%')
 				continue
@@ -630,13 +640,23 @@ func printfText(format string, args []string) string {
 			if format[j] == 'b' {
 				arg = echoEscapes(arg)
 			}
+			if prec >= 0 && prec < len(arg) && (format[j] == 's' || format[j] == 'b') {
+				arg = arg[:prec]
+			}
 			b.WriteString(arg)
 		}
-		if !used {
+		if lit < len(format) && b.Len() < maxPrinted {
+			b.WriteString(ansiC(format[lit:]))
+		}
+		if !used || b.Len() >= maxPrinted {
 			break
 		}
 	}
-	return b.String()
+	out := b.String()
+	if len(out) > maxPrinted {
+		out = out[:maxPrinted]
+	}
+	return out
 }
 
 // readsScriptFromStdin reports whether a command (past its wrappers) is a
@@ -947,4 +967,26 @@ func takesValue(w string) bool {
 	}
 	letter, v, _ := shortValue(w, wr.short, []string{"x"})
 	return letter != 0 && v == "x"
+}
+
+// passesStdin reports whether a pipeline stage copies its stdin to its
+// stdout: cat with no file (or -), tee, with no redirection of its own.
+func passesStdin(st *syntax.Stmt) bool {
+	call, ok := st.Cmd.(*syntax.CallExpr)
+	if !ok || len(st.Redirs) > 0 {
+		return false
+	}
+	ws := callWords(call)
+	i, split := skipWrappers(ws)
+	if split != nil || i >= len(ws) {
+		return false
+	}
+	args := ws[i+1:]
+	switch path.Base(ws[i]) {
+	case "tee":
+		return true
+	case "cat":
+		return len(args) == 0 || (len(args) == 1 && args[0] == "-")
+	}
+	return false
 }

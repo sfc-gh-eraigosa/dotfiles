@@ -663,7 +663,13 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     assert_exit 2 Bash "printf '%s %s %s %s\\n' gff set gss.approval-token.enabled false | bash" 'parsed: printf fills its format'
     assert_exit 2 Bash "printf '%b\\n' '\\0147ff set gss.approval-token.enabled false' | bash" 'parsed: printf %b decodes its argument'
     assert_exit 2 Bash "env -S \$'-a 1=2 \\x67ff set gss.approval-token.enabled false'" 'parsed: env -S -a value is not an assignment'
-    assert_exit 2 Bash "env -S \$'\\x67ff\\rset\\rgss.approval-token.enabled\\rfalse'" 'parsed: env -S splits on CR' )
+    assert_exit 2 Bash "env -S \$'\\x67ff\\rset\\rgss.approval-token.enabled\\rfalse'" 'parsed: env -S splits on CR'
+    # review of #475 (932acf3d)
+    assert_exit 2 Bash "printf '\\x67ff set gss.approval-token.enabled false' | bash" 'parsed: printf decodes \x in its format'
+    assert_exit 2 Bash "printf 'gff\\x20set gss.approval-token.enabled false' | bash" 'parsed: printf decodes \x20 between words'
+    assert_exit 2 Bash "printf '%.3s set gss.approval-token.enabled false' gffxyz | bash" 'parsed: printf applies precision'
+    assert_exit 2 Bash "echo 'gff set gss.approval-token.enabled false' | cat | bash" 'parsed: cat passes the text on'
+    assert_exit 2 Bash "echo 'gff set gss.approval-token.enabled false' | tee log | bash" 'parsed: tee passes the text on' )
   # a gss too old for --format: argv exits 1, the text check stands alone and
   # whatever it printed is dropped
   OLD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-oldgss.XXXXXX")"
