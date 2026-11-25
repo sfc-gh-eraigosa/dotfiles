@@ -12,6 +12,7 @@
 package shwords
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -23,8 +24,33 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
-// maxDepth bounds how far nested bash -c / eval / ssh scripts are followed.
+// maxDepth bounds how far nested bash -c / eval / ssh / env -S scripts are
+// followed.
 const maxDepth = 4
+
+// maxSteps and maxLines bound the work for one command, so crafted input
+// (thousands of env -S, deeply nested redirected groups) cannot hold the
+// hook past its timeout: past either, Lines stops and returns ErrTooBig
+// with the lines so far.
+const (
+	maxSteps = 50000
+	maxLines = 10000
+)
+
+// ErrTooBig: the command needs more work than maxSteps or maxLines allow.
+var ErrTooBig = errors.New("command too large to parse")
+
+// walk is one Lines call: its lines and the work spent.
+type walk struct {
+	out   []string
+	steps int
+}
+
+// spend counts one unit of work and reports whether the budget holds.
+func (w *walk) spend() bool {
+	w.steps++
+	return w.steps <= maxSteps && len(w.out) < maxLines
+}
 
 // Lines parses src as bash and returns one line per simple command: its
 // assignments and words, then each redirection as its operator glued to its
@@ -36,26 +62,64 @@ const maxDepth = 4
 // inside a substitution are lines of their own.
 //
 // On a syntax error Lines returns the lines of the statements before it,
-// which bash would have run, with the error.
+// which bash would have run, with the error; past the work budget, the
+// lines so far with ErrTooBig.
 func Lines(src string) ([]string, error) {
-	var out []string
-	err := lines(src, 0, &out)
-	return out, err
+	w := &walk{}
+	err := w.lines(src, 0, nil)
+	if !w.spend() {
+		return w.out, ErrTooBig
+	}
+	return w.out, err
 }
 
-func lines(src string, depth int, out *[]string) error {
+// lines parses src and records its commands. stdin is the heredocs and
+// here-strings the script inherits (bash -c, eval and a script fed to a
+// shell read the stdin of the command that ran them).
+func (w *walk) lines(src string, depth int, stdin []*syntax.Redirect) error {
 	return syntax.NewParser(syntax.Variant(syntax.LangBash)).Stmts(strings.NewReader(src), func(top *syntax.Stmt) bool {
-		syntax.Walk(top, func(n syntax.Node) bool {
-			if st, ok := n.(*syntax.Stmt); ok {
-				stmt(st, depth, out)
-			}
+		w.visit(top, depth, stdin)
+		return w.spend()
+	})
+}
+
+// visit records each statement under n. A statement's stdin is its own
+// heredoc or here-string, else the one around it: ( bash ) <<E and
+// { bash; } <<<x give it to the commands inside.
+func (w *walk) visit(n syntax.Node, depth int, stdin []*syntax.Redirect) {
+	syntax.Walk(n, func(m syntax.Node) bool {
+		if !w.spend() {
+			return false
+		}
+		st, ok := m.(*syntax.Stmt)
+		if !ok {
 			return true
-		})
+		}
+		eff := stdin
+		if own := stdinRedirs(st.Redirs); len(own) > 0 {
+			eff = own
+		}
+		w.stmt(st, depth, eff)
+		if _, simple := st.Cmd.(*syntax.CallExpr); !simple && st.Cmd != nil && len(eff) > 0 {
+			w.visit(st.Cmd, depth, eff)
+			return false
+		}
 		return true
 	})
 }
 
-func stmt(st *syntax.Stmt, depth int, out *[]string) {
+// stdinRedirs is the heredocs and here-strings in redirs.
+func stdinRedirs(redirs []*syntax.Redirect) []*syntax.Redirect {
+	var in []*syntax.Redirect
+	for _, r := range redirs {
+		if r.Hdoc != nil || (r.Op == syntax.WordHdoc && r.Word != nil) {
+			in = append(in, r)
+		}
+	}
+	return in
+}
+
+func (w *walk) stmt(st *syntax.Stmt, depth int, stdin []*syntax.Redirect) {
 	var parts, raw []string
 	if call, ok := st.Cmd.(*syntax.CallExpr); ok {
 		for _, a := range call.Assigns {
@@ -65,8 +129,8 @@ func stmt(st *syntax.Stmt, depth int, out *[]string) {
 			}
 			parts = append(parts, a.Name.Value+"="+token(v))
 		}
-		for _, w := range call.Args {
-			r := word(w)
+		for _, a := range call.Args {
+			r := word(a)
 			raw = append(raw, r)
 			parts = append(parts, token(r))
 		}
@@ -82,29 +146,20 @@ func stmt(st *syntax.Stmt, depth int, out *[]string) {
 		}
 		parts = append(parts, s)
 	}
-	if len(parts) > 0 {
-		*out = append(*out, strings.Join(parts, " "))
+	w.emit(parts)
+	if depth >= maxDepth || len(raw) == 0 {
+		return
 	}
-	if depth < maxDepth {
-		for _, inner := range nested(raw, st.Redirs) {
-			// bash runs the statements before a syntax error, and so do we
-			_ = lines(inner, depth+1, out)
-		}
-		if _, simple := st.Cmd.(*syntax.CallExpr); !simple && st.Cmd != nil && len(st.Redirs) > 0 {
-			// ( bash ) <<E, { bash; } <<<x: the commands inside read that stdin
-			syntax.Walk(st.Cmd, func(n syntax.Node) bool {
-				if call, ok := n.(*syntax.CallExpr); ok {
-					var ws []string
-					for _, w := range call.Args {
-						ws = append(ws, word(w))
-					}
-					for _, inner := range nested(ws, st.Redirs) {
-						_ = lines(inner, depth+1, out)
-					}
-				}
-				return true
-			})
-		}
+	for _, inner := range w.nested(raw, stdin, depth) {
+		// bash runs the statements before a syntax error, and so do we
+		_ = w.lines(inner, depth+1, stdin)
+	}
+}
+
+// emit records one line.
+func (w *walk) emit(parts []string) {
+	if len(parts) > 0 {
+		w.out = append(w.out, strings.Join(parts, " "))
 	}
 }
 
@@ -172,11 +227,9 @@ func skipWrappers(words []string) (int, []string) {
 		}
 		i++
 		splitAt := func(v string, rest []string) (int, []string) {
-			line := "env " + strings.ReplaceAll(v, `\_`, " ")
-			for _, w := range rest {
-				line += " " + shQuote(w)
-			}
-			return len(words), []string{line}
+			// env -S STRING ARGS... runs env with STRING's words then ARGS
+			ws := append([]string{"env"}, envSplit(v)...)
+			return len(words), append(ws, rest...)
 		}
 	options:
 		for i < len(words) {
@@ -225,41 +278,33 @@ func skipWrappers(words []string) (int, []string) {
 	return i, nil
 }
 
-// shQuote quotes s as one bash word.
-func shQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 // nested returns the shell scripts a command hands to another shell: the -c
 // script of bash/sh/dash/zsh/ksh (else its heredoc or here-string), what
 // source or . reads from stdin, eval's arguments, the remote command of
 // ssh, and the command env -S builds, after any wrappers. redirs are the
 // command's own redirections and those of a ( ) or { } around it.
-func nested(words []string, redirs []*syntax.Redirect) []string {
+//
+// depth counts env -S levels with the script levels, so a chain of env -S
+// stops at maxDepth like nested scripts do.
+func (w *walk) nested(words []string, redirs []*syntax.Redirect, depth int) []string {
+	if !w.spend() {
+		return nil
+	}
 	i, split := skipWrappers(words)
 	if split != nil {
-		// env -S: the command env runs after its split options, as a line of
-		// its own, and what that command reads from the stdin it inherits
-		ws := splitWords(split[0])
-		var out []string
-		if k, again := skipWrappers(ws); again == nil && k < len(ws) {
-			line := shQuote(ws[k])
-			for _, w := range ws[k+1:] {
-				line += " " + shQuote(w)
+		if depth >= maxDepth {
+			return nil
+		}
+		// env -S: the command env runs after its split options gets a line of
+		// its own, and is followed like any other
+		if k, again := skipWrappers(split); again == nil && k < len(split) {
+			parts := make([]string, 0, len(split)-k)
+			for _, a := range split[k:] {
+				parts = append(parts, token(a))
 			}
-			out = append(out, line)
+			w.emit(parts)
 		}
-		if out == nil {
-			return nested(ws, redirs)
-		}
-		// the line is parsed again on its own; add only what stdin gives
-		base := nested(ws, nil)
-		for _, s := range nested(ws, redirs) {
-			if !slices.Contains(base, s) {
-				out = append(out, s)
-			}
-		}
-		return out
+		return w.nested(split, redirs, depth+1)
 	}
 	if i >= len(words) {
 		return nil
@@ -269,6 +314,9 @@ func nested(words []string, redirs []*syntax.Redirect) []string {
 	case "bash", "sh", "dash", "zsh", "ksh":
 		return shellScripts(args, redirs)
 	case "source", ".":
+		if len(args) > 0 && args[0] == "--" {
+			args = args[1:]
+		}
 		if len(args) > 0 && isStdin(args[0]) {
 			return stdinScripts(redirs)
 		}
@@ -296,17 +344,68 @@ func nested(words []string, redirs []*syntax.Redirect) []string {
 	return nil
 }
 
-// splitWords is the words of the first simple command in line.
-func splitWords(line string) []string {
+// envSplit splits an env -S string the way GNU env does: on spaces and
+// tabs, with '...' literal, "..." and unquoted text taking \" \\ \' \_
+// (a space) \t \n \r \f \v \# \$, \c ending the string, and # after a
+// space starting a comment; an unquoted \_ separates words, a quoted one is a space. ; | & ( ) < > and ` are ordinary characters.
+func envSplit(s string) []string {
 	var words []string
-	_ = syntax.NewParser(syntax.Variant(syntax.LangBash)).Stmts(strings.NewReader(line), func(st *syntax.Stmt) bool {
-		if call, ok := st.Cmd.(*syntax.CallExpr); ok {
-			for _, w := range call.Args {
-				words = append(words, word(w))
-			}
+	var cur strings.Builder
+	in, inWord := byte(0), false
+	flush := func() {
+		if inWord {
+			words = append(words, cur.String())
+			cur.Reset()
+			inWord = false
 		}
-		return false
-	})
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case in == '\'':
+			if c == '\'' {
+				in = 0
+			} else {
+				cur.WriteByte(c)
+			}
+			continue
+		case c == '\\' && i+1 < len(s):
+			i++
+			e := s[i]
+			if e == 'c' {
+				flush()
+				return words
+			}
+			if in == 0 && e == '_' {
+				flush() // unquoted \_ separates words
+				continue
+			}
+			inWord = true
+			if r, ok := map[byte]byte{'t': '\t', 'n': '\n', 'r': '\r', 'f': '\f', 'v': '\v', '_': ' '}[e]; ok {
+				cur.WriteByte(r)
+			} else {
+				cur.WriteByte(e)
+			}
+			continue
+		case in == '"':
+			if c == '"' {
+				in = 0
+			} else {
+				cur.WriteByte(c)
+			}
+			continue
+		case c == '\'' || c == '"':
+			in, inWord = c, true
+		case c == ' ' || c == '\t' || c == '\n':
+			flush()
+		case c == '#' && !inWord:
+			return words
+		default:
+			cur.WriteByte(c)
+			inWord = true
+		}
+	}
+	flush()
 	return words
 }
 
@@ -519,6 +618,9 @@ func ansiC(s string) string {
 			}
 			i++
 			v = uint64(s[i] & 0x1f)
+			if s[i] == '\\' && i+1 < len(s) && s[i+1] == '\\' {
+				i++ // \c\\ is control-backslash, both backslashes taken
+			}
 		case '\\', '\'', '"', '?':
 			b.WriteByte(c)
 			continue

@@ -1,10 +1,12 @@
 package shwords
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLines(t *testing.T) {
@@ -96,8 +98,16 @@ func TestLines(t *testing.T) {
 		{"bash /dev/./stdin", "bash /dev/./stdin <<'E'\ngss push\nE\n", []string{"bash /dev/stdin <<E", "gss push"}},
 		{"source /dev/stdin", "source /dev/stdin <<'E'\ngss push\nE\n", []string{"source /dev/stdin <<E", "gss push"}},
 		{". /dev/fd/0 here-string", ". /dev/fd/0 <<< 'gss push'", []string{". /dev/fd/0 <<<gss_push", "gss push"}},
-		{"( bash ) heredoc", "(bash) <<'E'\ngss push\nE\n", []string{"<<E", "gss push", "bash"}},
-		{"{ bash; } here-string", "{ bash; } <<< 'gss push'", []string{"<<<gss_push", "gss push", "bash"}},
+		{"( bash ) heredoc", "(bash) <<'E'\ngss push\nE\n", []string{"<<E", "bash", "gss push"}},
+		{"{ bash; } here-string", "{ bash; } <<< 'gss push'", []string{"<<<gss_push", "bash", "gss push"}},
+		// agy review of #475 (4421ae47)
+		{"env -S ; is a character", "env -S 'X=; gss push'", []string{"env -S X=_gss_push", "gss push"}},
+		{"env -S ( is a character", "env -S 'X=( gss push'", []string{"env -S X=_gss_push", "gss push"}},
+		{"$'\\c\\\\' takes both backslashes", "echo $'a\\c\\\\0b'", []string{"echo a\x1c0b"}},
+		{"source -- /dev/stdin", "source -- /dev/stdin <<'E'\ngss push\nE\n", []string{"source -- /dev/stdin <<E", "gss push"}},
+		{"eval bash heredoc", "eval bash <<'E'\ngss push\nE\n", []string{"eval bash <<E", "bash", "gss push"}},
+		{"bash -c bash heredoc", "bash -c bash <<'E'\ngss push\nE\n", []string{"bash -c bash <<E", "bash", "gss push"}},
+		{"a > redirect is not stdin", "{ bash -c 'echo hi'; } >/dev/null", []string{">/dev/null", "bash -c echo_hi", "echo hi"}},
 		{"bash -s reads stdin", "bash -s x <<'IN'\ngss push\nIN\n", []string{"bash -s x <<IN", "gss push"}},
 		{"message text is one word", `git commit -m "gss push; gff set x"`, []string{"git commit -m gss_push_gff_set_x"}},
 	}
@@ -145,5 +155,53 @@ func TestPrint(t *testing.T) {
 	}
 	if err := Print(&b, "("); err == nil {
 		t.Fatal("want a parse error")
+	}
+}
+
+// Crafted input cannot hold the hook past its timeout (review of #475,
+// 4421ae47): env -S chains, deeply nested redirected groups and long
+// command lists each finish fast, within the line cap.
+func TestAdversarialInputIsBounded(t *testing.T) {
+	cases := map[string]string{
+		"env -S chain":    strings.Repeat("env -S '' ", 8000) + "; gff set k v",
+		"nested groups":   strings.Repeat("{ ", 1200) + strings.Repeat("bash; ", 1200) + strings.Repeat("} <<<x ", 1200),
+		"many commands":   strings.Repeat("gss push; ", 6000),
+		"nested bash -c":  strings.Repeat("bash -c ", 3000) + "'gss push'",
+		"eval of evals":   strings.Repeat("eval eval ", 3000),
+		"long heredoc in": "bash <<'E'\n" + strings.Repeat("gff set k v\n", 6000) + "E\n",
+	}
+	for name, src := range cases {
+		start := time.Now()
+		ls, err := Lines(src)
+		if d := time.Since(start); d > time.Second {
+			t.Errorf("%s (%d bytes): %v, want under 1s", name, len(src), d)
+		}
+		if len(ls) > maxLines {
+			t.Errorf("%s: %d lines, over maxLines", name, len(ls))
+		}
+		if err != nil && !errors.Is(err, ErrTooBig) {
+			t.Logf("%s: %v", name, err)
+		}
+	}
+	if _, err := Lines(strings.Repeat("gss push; ", 20000)); !errors.Is(err, ErrTooBig) {
+		t.Errorf("20000 commands: err = %v, want ErrTooBig", err)
+	}
+}
+
+// envSplit matches GNU env -S (checked against coreutils env).
+func TestEnvSplit(t *testing.T) {
+	cases := map[string][]string{
+		`X=; a b`:       {"X=;", "a", "b"},
+		`a\_b "c d" #x`: {"a", "b", "c d"},
+		`a 'b c' d\tq`:  {"a", "b c", "d\tq"},
+		`a\cb c`:        {"a"},
+		`"x\_y" z`:      {"x y", "z"},
+		`X=( b|c`:       {"X=(", "b|c"},
+		`printf [%s] a`: {"printf", "[%s]", "a"},
+	}
+	for in, want := range cases {
+		if got := envSplit(in); !reflect.DeepEqual(got, want) {
+			t.Errorf("envSplit(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

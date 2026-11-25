@@ -551,9 +551,15 @@ assert_exit 2 Bash "perl -pi -e 's/true/false/' ~/.config/gff/config.yaml" "perl
 # cannot. SG_GSS_BIN names a gss that has argv; else one is built from this
 # checkout when go is installed; else these cases are skipped.
 ARGV_DIR=""
-if [ -n "${SG_GSS_BIN:-}" ] && [ -x "$SG_GSS_BIN" ]; then
-    ARGV_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-argv.XXXXXX")"
-    ln -s "$SG_GSS_BIN" "$ARGV_DIR/gss"
+if [ -n "${SG_GSS_BIN:-}" ]; then
+    # a relative path would dangle once linked into a temp dir
+    sg_bin="$(cd "$(dirname "$SG_GSS_BIN")" 2> /dev/null && pwd)/$(basename "$SG_GSS_BIN")"
+    if [ ! -x "$sg_bin" ]; then
+        echo "FAIL: SG_GSS_BIN=$SG_GSS_BIN is not an executable"; echo FAIL >> "$RESULTS"
+    else
+        ARGV_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-argv.XXXXXX")"
+        ln -s "$sg_bin" "$ARGV_DIR/gss"
+    fi
 elif command -v go > /dev/null 2>&1; then
     ARGV_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-argv.XXXXXX")"
     (cd "$REPO_ROOT/sdk/gss" && go build -o "$ARGV_DIR/gss" .) > /dev/null 2>&1 || { rm -rf "$ARGV_DIR"; ARGV_DIR=""; }
@@ -629,7 +635,13 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     assert_exit 2 Bash $'bash /dev/./stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: /dev/./stdin is stdin'
     assert_exit 2 Bash $'source /dev/stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: source /dev/stdin reads its heredoc'
     assert_exit 2 Bash $'(bash) <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: ( bash ) reads the heredoc around it'
-    assert_exit 2 Bash $'{ bash; } <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: { bash; } reads the heredoc around it' )
+    assert_exit 2 Bash $'{ bash; } <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: { bash; } reads the heredoc around it'
+    # agy review of #475 (4421ae47)
+    assert_exit 2 Bash "env -S \$'X=; \\x67ff set gss.approval-token.enabled false'" 'parsed: env -S reads ; as a character'
+    assert_exit 2 Bash "env -S \$'X=( \\x67ff set gss.approval-token.enabled false'" 'parsed: env -S reads ( as a character'
+    assert_exit 2 Bash $'source -- /dev/stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: source -- /dev/stdin reads its heredoc'
+    assert_exit 2 Bash $'eval bash <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: eval bash reads the heredoc'
+    assert_exit 2 Bash $'bash -c bash <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: bash -c bash reads the heredoc' )
   # a gss too old for --format: argv exits 1, the text check stands alone and
   # whatever it printed is dropped
   OLD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-oldgss.XXXXXX")"
@@ -638,6 +650,19 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
   ( unset GSS_REQUIRE_APPROVAL; export PATH="$OLD_DIR:$PATH" HOME="$OLD_DIR/home"
     assert_exit 2 Bash 'gff set gss.approval-token.enabled false' 'old gss: the text check still refuses gff set'
     assert_exit 0 Bash 'echo hello' 'old gss: a benign command passes' )
+  # an argv that hangs is cut off at 5 s and its output dropped; the text
+  # check still runs (review of #475, 4421ae47)
+  if command -v timeout > /dev/null 2>&1; then
+    printf '#!/bin/sh\necho "gff set gss.approval-token.enabled false"\nsleep 30\n' > "$OLD_DIR/gss"
+    ( unset GSS_REQUIRE_APPROVAL; export PATH="$OLD_DIR:$PATH" HOME="$OLD_DIR/home"
+      t0=$(date +%s)
+      assert_exit 0 Bash 'echo hello' 'slow argv: cut off, a benign command passes'
+      if [ $(($(date +%s) - t0)) -le 10 ]; then
+        echo "PASS: slow argv: the hook finished within 10 s"; echo PASS >> "$RESULTS"
+      else
+        echo "FAIL: slow argv: the hook took over 10 s"; echo FAIL >> "$RESULTS"
+      fi )
+  fi
   rm -rf "$OLD_DIR"
 else
   echo "SKIP: no gss with hooks argv (set SG_GSS_BIN, or install go): the parsed cases did not run"
