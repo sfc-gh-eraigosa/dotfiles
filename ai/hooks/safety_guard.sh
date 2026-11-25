@@ -301,8 +301,9 @@ gss_publish_verb() {
 # --format, exit 1), CMD_PARSED is empty and the text match stands alone.
 CMD_PARSED=""
 if command -v gss > /dev/null 2>&1; then
-    CMD_PARSED="$(printf '%s' "$CMD" | gss hooks argv --format=lines 2> /dev/null)"
-    case $? in 0 | 2) ;; *) CMD_PARSED="" ;; esac
+    argv_rc=0
+    CMD_PARSED="$(printf '%s' "$CMD" | gss hooks argv --format=lines 2> /dev/null)" || argv_rc=$?
+    case $argv_rc in 0 | 2) ;; *) CMD_PARSED="" ;; esac
 fi
 gss_publish_parsed() {
     local l

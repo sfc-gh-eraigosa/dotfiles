@@ -121,7 +121,7 @@ var wrappers = map[string]wrapper{
 	"nice":    {"n", []string{"--adjustment"}},
 	"timeout": {"sk", []string{"--signal", "--kill-after"}},
 	"stdbuf":  {"ioe", []string{"--input", "--output", "--error"}},
-	"xargs":   {"aEdIiLlnPs", []string{"--arg-file", "--delimiter", "--max-args", "--max-procs", "--max-lines", "--max-chars", "--process-slot-var"}},
+	"xargs":   {"aEdILnPs", []string{"--arg-file", "--delimiter", "--max-args", "--max-procs", "--max-lines", "--max-chars", "--process-slot-var"}},
 }
 
 // shortValue reads a cluster of short options (-tp, -uroot, -oX=y) as getopt
@@ -143,18 +143,26 @@ func shortValue(w, opts string, next []string) (byte, string, bool) {
 	return 0, "", false
 }
 
-// skipWrappers returns the index of the command a run of wrappers runs, and
-// the strings env -S splits into a command line of their own.
+// skipWrappers returns the index of the command a run of wrappers runs.
+// env -S STRING splits STRING into words and runs them followed by the rest
+// of the arguments; that whole command line is returned as split, with the
+// index past the end.
 func skipWrappers(words []string) (int, []string) {
-	var split []string
 	i := 0
 	for i < len(words) {
 		name := path.Base(words[i])
 		wr, ok := wrappers[name]
 		if !ok {
-			return i, split
+			return i, nil
 		}
 		i++
+		splitAt := func(v string, rest []string) (int, []string) {
+			line := v
+			for _, w := range rest {
+				line += " " + shQuote(w)
+			}
+			return len(words), []string{line}
+		}
 	options:
 		for i < len(words) {
 			w := words[i]
@@ -163,8 +171,6 @@ func skipWrappers(words []string) (int, []string) {
 				i++
 				break options
 			case name == "env" && w == "-":
-				i++
-			case name == "env" && strings.Contains(w, "=") && !strings.HasPrefix(w, "-"):
 				i++
 			case strings.HasPrefix(w, "--"):
 				i++
@@ -177,7 +183,7 @@ func skipWrappers(words []string) (int, []string) {
 					i++
 				}
 				if name == "env" && k == "--split-string" {
-					split = append(split, v)
+					return splitAt(v, words[i:])
 				}
 			case strings.HasPrefix(w, "-") && len(w) > 1:
 				i++
@@ -185,18 +191,28 @@ func skipWrappers(words []string) (int, []string) {
 				if took {
 					i++
 				}
-				if name == "env" && letter == 'S' && v != "" {
-					split = append(split, v)
+				if name == "env" && letter == 'S' {
+					return splitAt(v, words[i:])
 				}
 			default:
 				break options
 			}
 		}
+		// NAME=VALUE before the command, after the options or a --
+		for (name == "env" || name == "sudo") && i < len(words) &&
+			strings.Contains(words[i], "=") && !strings.HasPrefix(words[i], "-") {
+			i++
+		}
 		if name == "timeout" && i < len(words) {
 			i++ // the duration
 		}
 	}
-	return i, split
+	return i, nil
+}
+
+// shQuote quotes s as one bash word.
+func shQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // nested returns the shell scripts a command hands to another shell: the -c
@@ -236,6 +252,9 @@ func nested(words []string, redirs []*syntax.Redirect) []string {
 	return split
 }
 
+// stdinPath names the script file operands that are the shell's own stdin.
+var stdinPath = map[string]bool{"/dev/stdin": true, "/dev/fd/0": true, "/proc/self/fd/0": true}
+
 // shellScripts is what a shell runs from its arguments and redirections:
 // the first operand after its options when one of them has c; else, when
 // there is no script file operand (or -s says read stdin), the body of its
@@ -253,9 +272,16 @@ options:
 			break options
 		case a == "-o" || a == "+o" || a == "-O" || a == "+O":
 			j++
-		case a[0] == '-' && !strings.HasPrefix(a, "--"):
-			c = c || strings.ContainsRune(a, 'c')
-			s = s || strings.ContainsRune(a, 's')
+		case a == "--rcfile" || a == "--init-file":
+			j++
+		case !strings.HasPrefix(a, "--"):
+			if a[0] == '-' {
+				c = c || strings.ContainsRune(a, 'c')
+				s = s || strings.ContainsRune(a, 's')
+			}
+			if strings.ContainsAny(a[1:], "oO") {
+				j++ // -eo pipefail: the option name
+			}
 		}
 	}
 	if c {
@@ -264,7 +290,7 @@ options:
 		}
 		return nil
 	}
-	if j < len(args) && !s {
+	if j < len(args) && !s && !stdinPath[args[j]] {
 		return nil // stdin is the script's data, not a script
 	}
 	var docs []string
@@ -427,8 +453,12 @@ func ansiC(s string) string {
 			}
 			i++
 			v = uint64(s[i] & 0x1f)
+		case '\\', '\'', '"', '?':
+			b.WriteByte(c)
+			continue
 		default:
-			// \\ \' \" \? and anything else: the character itself
+			// an escape bash does not know keeps its backslash (\<newline> too)
+			b.WriteByte('\\')
 			b.WriteByte(c)
 			continue
 		}

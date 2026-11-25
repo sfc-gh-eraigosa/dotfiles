@@ -608,8 +608,27 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     assert_exit 2 Bash "env --unset FOO bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env --unset FOO bash -c is read'
     assert_exit 2 Bash "env -S \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env -S splits its string'
     assert_exit 0 Bash $'bash ./setup.sh <<\'IN\'\ncat ~/.config/gff/config.yaml > /tmp/x\nIN' "parsed: a script file's stdin is its data"
+    # review of #475 (ae70eae4)
+    assert_exit 2 Bash $'bash /dev/stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: bash /dev/stdin runs its heredoc'
+    assert_exit 2 Bash $'sh /dev/fd/0 <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: sh /dev/fd/0 runs its heredoc'
     assert_exit 0 Bash 'gh pr comment 1 --body "x > ~/.config/gff/config.yaml"' 'parsed: a > inside a message is text'
-    assert_exit 0 Bash 'git commit -m "gff set gss.approval-token.enabled false is refused"' 'parsed: a commit message naming gff set is text' )
+    assert_exit 0 Bash 'git commit -m "gff set gss.approval-token.enabled false is refused"' 'parsed: a commit message naming gff set is text'
+    # agy review of #475 (ae70eae4)
+    assert_exit 2 Bash "bash -eo pipefail -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: bash -eo pipefail -c is read'
+    assert_exit 2 Bash "env -S 'bash -c' \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env -S prepends its words to the rest'
+    assert_exit 2 Bash "env -- FOO=bar bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env -- NAME=v bash -c is read'
+    assert_exit 2 Bash "sudo FOO=bar bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: sudo NAME=v bash -c is read'
+    assert_exit 2 Bash "xargs -i bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: xargs -i takes no next word'
+    assert_exit 2 Bash "echo ' # ' && bash -c \$'g\\"$'\n'"ff set gss.approval-token.enabled false'" "parsed: \$'g\\<nl>ff' keeps its backslash"
+    assert_exit 0 Bash $'echo ok\nfi' 'parsed: a benign command with a syntax error (argv exit 2) passes' )
+  # a gss too old for --format: argv exits 1, the text check stands alone
+  OLD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-oldgss.XXXXXX")"
+  printf '#!/bin/sh\necho "unknown flag: --format" >&2\nexit 1\n' > "$OLD_DIR/gss"; chmod +x "$OLD_DIR/gss"
+  printf '#!/bin/sh\nexit 0\n' > "$OLD_DIR/gff"; chmod +x "$OLD_DIR/gff"
+  ( unset GSS_REQUIRE_APPROVAL; export PATH="$OLD_DIR:$PATH" HOME="$OLD_DIR/home"
+    assert_exit 2 Bash 'gff set gss.approval-token.enabled false' 'old gss: the text check still refuses gff set'
+    assert_exit 0 Bash 'echo hello' 'old gss: a benign command passes' )
+  rm -rf "$OLD_DIR"
 else
   echo "SKIP: no gss with hooks argv (set SG_GSS_BIN, or install go): the parsed cases did not run"
 fi

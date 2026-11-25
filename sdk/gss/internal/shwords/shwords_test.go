@@ -2,6 +2,7 @@ package shwords
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -74,6 +75,19 @@ func TestLines(t *testing.T) {
 		{"env -S", "env -S 'gss push'", []string{"env -S gss_push", "gss push"}},
 		{"env --split-string=", "env --split-string='gss push'", []string{"env --split-string=gss_push", "gss push"}},
 		{"a script file's stdin is data", "bash ./setup.sh <<'IN'\ngss push\nIN\n", []string{"bash ./setup.sh <<IN"}},
+		{"bash /dev/stdin reads stdin", "bash /dev/stdin <<'E'\ngss push\nE\n", []string{"bash /dev/stdin <<E", "gss push"}},
+		{"sh /dev/fd/0 reads stdin", "sh /dev/fd/0 <<'E'\ngss push\nE\n", []string{"sh /dev/fd/0 <<E", "gss push"}},
+		{"bash --rcfile x -c", "bash --rcfile /dev/null -c 'gss push'", []string{"bash --rcfile /dev/null -c gss_push", "gss push"}},
+		// agy review of #475 (ae70eae4)
+		{"bash -eo pipefail -c", "bash -eo pipefail -c 'gss push'", []string{"bash -eo pipefail -c gss_push", "gss push"}},
+		{"bash -co pipefail script", "bash -co pipefail 'gss push'", []string{"bash -co pipefail gss_push", "gss push"}},
+		{"bash -eo pipefail heredoc", "bash -eo pipefail <<'E'\ngss push\nE\n", []string{"bash -eo pipefail <<E", "gss push"}},
+		{"env -S prepends to the rest", "env -S 'bash -c' 'gss push'", []string{"env -S bash_-c gss_push", "bash -c gss_push", "gss push"}},
+		{"env -- NAME=v", "env -- FOO=bar bash -c 'gss push'", []string{"env -- FOO=bar bash -c gss_push", "gss push"}},
+		{"sudo NAME=v", "sudo FOO=bar bash -c 'gss push'", []string{"sudo FOO=bar bash -c gss_push", "gss push"}},
+		{"xargs -i takes no next word", "xargs -i bash -c 'gss push'", []string{"xargs -i bash -c gss_push", "gss push"}},
+		{"$'\\<nl>' keeps its backslash", "bash -c $'g\\\nss push'", []string{`bash -c g\_ss_push`, "gss push"}},
+		{"unknown $'\\q' keeps its backslash", "echo $'\\q'", []string{`echo \q`}},
 		{"bash -s reads stdin", "bash -s x <<'IN'\ngss push\nIN\n", []string{"bash -s x <<IN", "gss push"}},
 		{"message text is one word", `git commit -m "gss push; gff set x"`, []string{"git commit -m gss_push_gff_set_x"}},
 	}
@@ -105,8 +119,12 @@ func TestNestingIsBounded(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		src = "eval " + strings.ReplaceAll(src, " ", `\ `)
 	}
-	if _, err := Lines(src); err != nil {
+	ls, err := Lines(src)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(ls) != maxDepth+1 || slices.Contains(ls, "gss push") {
+		t.Fatalf("Lines = %d lines (want %d), reached the innermost: %v", len(ls), maxDepth+1, slices.Contains(ls, "gss push"))
 	}
 }
 
