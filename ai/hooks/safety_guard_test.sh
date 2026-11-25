@@ -414,7 +414,7 @@ assert_exit 2 Bash "gff set gss.approval-token.enabled false"           "gff set
 assert_exit 2 Bash "gff unset gss.approval-token.enabled"               "gff unset of the approval flag is refused"
 assert_exit 2 Bash "\$HOME/opt/bin/gff set gss.approval-token.enabled true" "gff by path, set of the approval flag is refused"
 assert_exit 2 Bash "echo 'x: 1' >> ~/.config/gff/config.yaml"            "appending to the gff override file is refused"
-assert_exit 2 Bash "sed -i 's/true/false/' ~/.config/gff/config.yaml"   "sed -i on the gff override file is refused"
+assert_exit 2 Bash "sed -i.bak 's/true/false/' ~/.config/gff/config.yaml"   "sed -i.bak on the gff override file is refused"
 assert_exit 2 Bash "rm ~/.config/gff/config.yaml"                       "removing the gff override file is refused"
 assert_exit 0 Bash "gff get gss.approval-token.enabled"                 "reading the approval flag is fine"
 assert_exit 0 Bash "gff enabled gss.approval-token.enabled"             "asking whether the approval flag is on is fine"

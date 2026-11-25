@@ -1,12 +1,17 @@
 package approval
 
 import (
+	"errors"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/git"
 )
+
+// errNoGFF: gff is not in any of the dirs gffPATH lists.
+var errNoGFF = errors.New("gff not found")
 
 // FlagKey is the gff flag that turns the approval token on. It is off by
 // default (operator, 2026-11-23: the handshake added a round trip per PR
@@ -42,11 +47,8 @@ var (
 		if err != nil {
 			return err
 		}
-		cmd := exec.Command(p, args...)
-		cmd.Env = gffEnv()
 		// "/" like the hook: the home dir can be writable or a repo itself.
-		cmd.Dir = "/"
-		return cmd.Run()
+		return git.RunIsolated(p, "/", gffEnv(), args...)
 	}
 	userHome = func() string {
 		if u, err := user.Current(); err == nil {
@@ -84,7 +86,7 @@ func cleanLookPath(name string) (string, error) {
 			return p, nil
 		}
 	}
-	return "", exec.ErrNotFound
+	return "", errNoGFF
 }
 
 // TokenRequired reports whether gated verbs need an approval token: on when

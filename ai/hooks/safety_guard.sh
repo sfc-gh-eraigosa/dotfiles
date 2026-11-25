@@ -279,9 +279,9 @@ gss_strip() {
 }
 CMD_JOINED="$(gss_join "$CMD_SCRUBBED")"
 CMD_GSS="$(gss_strip "$CMD_JOINED")"
-GSS_LEAD='(^|[[:space:];|&(`])'
-GSS_BIN='((/|~/|[$]HOME/|[$][{]HOME[}]/|[.][.]?/)([^[:space:];|&`]*/)?)?gss'
-GSS_END='([[:space:];|&)`<>]|$)'
+GSS_LEAD='(^|[[:space:];&|(`])'
+GSS_BIN='((/|~/|[$]HOME/|[$][{]HOME[}]/|[.][.]?/)([^[:space:];&|`]*/)?)?gss'
+GSS_END='([[:space:];&|)`<>]|$)'
 GSS_VERB_ANY="${GSS_LEAD}${GSS_BIN}${GSS_GLOBAL_FLAGS}[[:space:]]+"
 gss_publish_verb() {
     local t="$1"
@@ -349,7 +349,7 @@ gff_cmd_parts() {
     if [ "${#s}" -gt 4000 ] || [[ "$s" == *\\* || "$s" == *\$[\'\"\(]* || "$s" == *\`* ]]; then
         # strict: the quote-stripped command (as rule 10 sees it), split like code
         s="$(gff_norm "$2")"
-        printf '%s\n' "${s//[;|&()\`]/$'\n'}"
+        printf '%s\n' "${s//[;&|()\`]/$'\n'}"
         return
     fi
     for ((i = 0; i < ${#s}; i++)); do
