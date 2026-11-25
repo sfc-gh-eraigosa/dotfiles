@@ -112,7 +112,7 @@ func TestLines(t *testing.T) {
 		{"a > redirect is not stdin", "{ bash -c 'echo hi'; } >/dev/null", []string{">/dev/null", "bash -c echo_hi", "echo hi"}},
 		// review of #475 (d8ae013e): text piped into a shell
 		{"echo | bash", "echo 'gss push' | bash", []string{"gss push", "echo gss_push", "bash"}},
-		{"printf | sh -s", "printf '%s\\n' 'gss push' | sh -s", []string{"%s", "gss push", "printf %s\\n gss_push", "sh -s"}},
+		{"printf | sh -s", "printf '%s\\n' 'gss push' | sh -s", []string{"gss push", "printf %s\\n gss_push", "sh -s"}},
 		{"cat heredoc | bash", "cat <<'E' | bash\ngss push\nE\n", []string{"gss push", "cat <<E", "bash"}},
 		{"echo | bash -c is not stdin", "echo 'gss push' | bash -c 'wc -l'", []string{"echo gss_push", "bash -c wc_-l", "wc -l"}},
 		{"echo | bash script is not stdin", "echo 'gss push' | bash ./run.sh", []string{"echo gss_push", "bash ./run.sh"}},
@@ -124,6 +124,18 @@ func TestLines(t *testing.T) {
 		{"env -a x", "env -a x bash -c 'gss push'", []string{"env -a x bash -c gss_push", "gss push"}},
 		{"env -S keeps NAME=", "env -S 'G=~/.config/gff/c git x a/../../b'", []string{"env -S G=~/.config/b_~/.config/gff/c_git_x_../b", "G=~/.config/gff/c git x ../b"}},
 		{"heredoc read by bash in it, once", "bash <<'E'\n" + strings.Repeat("bash;", 20) + "\nE\n", append([]string{"bash <<E"}, slices.Repeat([]string{"bash"}, 20)...)},
+		// review of #475 (97da8f3c): a script seen without stdin, then with it
+		{"sh -c sh, then with a heredoc", "sh -c sh </dev/null && sh -c sh <<'E'\ngss push\nE\n", []string{"sh -c sh </dev/null", "sh", "sh -c sh <<E", "sh", "gss push"}},
+		{"eval bash, then with a here-string", "eval bash </dev/null; eval bash <<< 'gss push'", []string{"eval bash </dev/null", "bash", "eval bash <<<gss_push", "bash", "gss push"}},
+		// agy review of #475 (97da8f3c)
+		{"3-stage pipe", "true | echo 'gss push' | bash", []string{"gss push", "true", "echo gss_push", "bash"}},
+		{"command echo | bash", "command echo 'gss push' | bash", []string{"gss push", "command echo gss_push", "bash"}},
+		{"printf format operands", "printf '%s %s\\n' gss push | bash", []string{"gss push", "printf %s_%s\\n gss push", "bash"}},
+		{"printf %b", "printf '%b\\n' '\\0147ss push' | bash", []string{"gss push", "printf %b\\n \\0147ss_push", "bash"}},
+		{"echo -e \\0NNN", "echo -e '\\0147ss push' | bash", []string{"0147ss push", "gss push", "echo -e \\0147ss_push", "bash"}},
+		{"cat - heredoc", "cat - <<E | bash\ngss push\nE\n", []string{"gss push", "cat - <<E", "bash"}},
+		{"env -S -a 1=2", "env -S '-a 1=2 gss push'", []string{"env -S -a_1=2_gss_push", "gss push"}},
+		{"env -S splits on CR", "env -S 'gss\rpush'", []string{"env -S gss_push", "gss push"}},
 		{"bash -s reads stdin", "bash -s x <<'IN'\ngss push\nIN\n", []string{"bash -s x <<IN", "gss push"}},
 		{"message text is one word", `git commit -m "gss push; gff set x"`, []string{"git commit -m gss_push_gff_set_x"}},
 	}

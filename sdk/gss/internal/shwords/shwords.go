@@ -44,19 +44,25 @@ var ErrTooBig = errors.New("command too large to parse")
 type walk struct {
 	out   []string
 	steps int
-	seen  map[string]bool // scripts already parsed: one heredoc read by 60 shells is parsed once
+	seen  map[string]int // script and stdin -> shallowest depth parsed: one heredoc read by 60 shells is parsed once
 }
 
 // script parses a nested script once; bash runs the statements before a
 // syntax error, and so do we.
 func (w *walk) script(src string, depth int, stdin []*syntax.Redirect) {
 	if w.seen == nil {
-		w.seen = map[string]bool{}
+		w.seen = map[string]int{}
 	}
-	if w.seen[src] {
+	// the same text with another stdin is another script, and one first
+	// seen deeper has had less depth left to follow its own nesting
+	key := src
+	for _, r := range stdin {
+		key += fmt.Sprintf("\x00%p", r)
+	}
+	if d, ok := w.seen[key]; ok && d <= depth {
 		return
 	}
-	w.seen[src] = true
+	w.seen[key] = depth
 	_ = w.lines(src, depth, stdin)
 }
 
@@ -323,7 +329,7 @@ func (w *walk) nested(words []string, redirs []*syntax.Redirect, depth int) []st
 		// its own, and is followed like any other
 		if k, again := skipWrappers(split); again == nil && k < len(split) {
 			// from the first NAME=VALUE on, so an assignment stays on the line
-			for k > 1 && strings.Contains(split[k-1], "=") && !strings.HasPrefix(split[k-1], "-") {
+			for k > 1 && isAssign(split[k-1]) && !takesValue(split[k-2]) {
 				k--
 			}
 			parts := make([]string, 0, len(split)-k)
@@ -427,7 +433,7 @@ func envSplit(s string) []string {
 			continue
 		case c == '\'' || c == '"':
 			in, inWord = c, true
-		case c == ' ' || c == '\t' || c == '\n':
+		case strings.IndexByte(" \t\n\r\f\v", c) >= 0:
 			flush()
 		case c == '#' && !inWord:
 			return words
@@ -504,40 +510,133 @@ func pipedScript(b *syntax.BinaryCmd) []string {
 	if !ok || !readsScriptFromStdin(callWords(right)) {
 		return nil
 	}
-	left, ok := b.X.Cmd.(*syntax.CallExpr)
+	// a | b | bash parses as (a | b) | bash: the producer is the last stage
+	x := b.X
+	for {
+		inner, ok := x.Cmd.(*syntax.BinaryCmd)
+		if !ok || (inner.Op != syntax.Pipe && inner.Op != syntax.PipeAll) {
+			break
+		}
+		x = inner.Y
+	}
+	left, ok := x.Cmd.(*syntax.CallExpr)
 	if !ok {
 		return nil
 	}
 	ws := callWords(left)
-	if len(ws) == 0 {
+	i, split := skipWrappers(ws)
+	if split != nil || i >= len(ws) {
 		return nil
 	}
-	switch path.Base(ws[0]) {
+	args := ws[i+1:]
+	switch path.Base(ws[i]) {
 	case "echo":
-		args := ws[1:]
 		for len(args) > 0 && strings.HasPrefix(args[0], "-") {
 			args = args[1:]
 		}
 		// as printed, and with echo -e's escapes decoded
 		text := strings.Join(args, " ")
-		return []string{text, ansiC(text)}
+		return []string{text, echoEscapes(text)}
 	case "printf":
-		args := ws[1:]
 		if len(args) > 0 && args[0] == "--" {
 			args = args[1:]
 		}
 		if len(args) == 0 {
 			return nil
 		}
-		// the format with its escapes decoded, and the arguments one per line
-		// (printf '%s\n' 'gss push')
-		return []string{ansiC(args[0]), strings.Join(args[1:], "\n")}
+		return []string{printfText(args[0], args[1:])}
 	case "cat":
-		if len(ws) == 1 {
-			return stdinScripts(b.X.Redirs)
+		if len(args) == 0 || (len(args) == 1 && args[0] == "-") {
+			return stdinScripts(x.Redirs)
 		}
 	}
 	return nil
+}
+
+// echoEscapes decodes echo -e's escapes: as $'...', but an octal escape is
+// \0 and up to three more digits (\0147 is g).
+func echoEscapes(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) && s[i+1] == '0' {
+			j := i + 2
+			for j < len(s) && j < i+5 && s[j] >= '0' && s[j] <= '7' {
+				j++
+			}
+			v, _ := strconv.ParseUint("0"+s[i+2:j], 8, 16)
+			b.WriteByte(byte(v))
+			i = j - 1
+			continue
+		}
+		if s[i] == '\\' && i+1 < len(s) && s[i+1] == 'c' {
+			break // \c: no further output
+		}
+		j := i
+		for j < len(s) && !(s[j] == '\\' && j+1 < len(s) && (s[j+1] == '0' || s[j+1] == 'c')) {
+			j++
+		}
+		if j == i {
+			j++
+		}
+		b.WriteString(ansiC(s[i:j]))
+		i = j - 1
+	}
+	return b.String()
+}
+
+// printfText is what printf FORMAT ARGS... prints, for the conversions a
+// script could hide in: %s and %b (with echo -e escapes) take the next
+// argument, %% is %, any other conversion takes an argument as is, and the
+// format repeats while arguments are left, as bash's printf does.
+func printfText(format string, args []string) string {
+	var b strings.Builder
+	for pass := 0; pass == 0 || (len(args) > 0 && pass < 1000); pass++ {
+		used := false
+		for i := 0; i < len(format); i++ {
+			c := format[i]
+			if c == '\\' {
+				j := i + 1
+				for j < len(format) && j < i+4 && format[j] >= '0' && format[j] <= '7' {
+					j++
+				}
+				if j == i+1 && j < len(format) {
+					j++
+				}
+				b.WriteString(echoEscapes(format[i:j]))
+				i = j - 1
+				continue
+			}
+			if c != '%' || i+1 == len(format) {
+				b.WriteByte(c)
+				continue
+			}
+			j := i + 1
+			for j < len(format) && strings.IndexByte("-+ #0123456789.*", format[j]) >= 0 {
+				j++
+			}
+			if j == len(format) {
+				b.WriteString(format[i:])
+				break
+			}
+			i = j
+			if format[j] == '%' {
+				b.WriteByte('%')
+				continue
+			}
+			arg := ""
+			if len(args) > 0 {
+				arg, args, used = args[0], args[1:], true
+			}
+			if format[j] == 'b' {
+				arg = echoEscapes(arg)
+			}
+			b.WriteString(arg)
+		}
+		if !used {
+			break
+		}
+	}
+	return b.String()
 }
 
 // readsScriptFromStdin reports whether a command (past its wrappers) is a
@@ -819,4 +918,33 @@ func stripTabs(s string, atStart bool) string {
 		b.WriteByte(s[i])
 	}
 	return b.String()
+}
+
+// isAssign reports whether w is NAME=VALUE with a shell variable name.
+func isAssign(w string) bool {
+	i := strings.IndexByte(w, '=')
+	if i <= 0 {
+		return false
+	}
+	for k := 0; k < i; k++ {
+		c := w[k]
+		if !(c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || k > 0 && c >= '0' && c <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// takesValue reports whether w is an env option whose value is the next
+// word (-u X, -a x, --argv0 x), so that word is not an assignment.
+func takesValue(w string) bool {
+	wr := wrappers["env"]
+	if strings.HasPrefix(w, "--") {
+		return !strings.Contains(w, "=") && slices.Contains(wr.long, w)
+	}
+	if !strings.HasPrefix(w, "-") || len(w) < 2 {
+		return false
+	}
+	letter, v, _ := shortValue(w, wr.short, []string{"x"})
+	return letter != 0 && v == "x"
 }

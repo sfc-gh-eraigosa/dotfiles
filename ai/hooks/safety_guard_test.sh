@@ -653,7 +653,17 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     assert_exit 2 Bash $'( : ) <<E\n$(gff set gss.approval-token.enabled false)\nE' "parsed: a \$(...) in a group's heredoc runs"
     assert_exit 2 Bash "env -S \$'X=\\'\\\\\\'\\' \\x67ff set gss.approval-token.enabled false'" "parsed: env -S reads \\' inside '...'"
     assert_exit 2 Bash "env -a x bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env -a takes a value'
-    assert_exit 2 Bash $'bash <<-\'E\'\n\tg\\\n\tff set gss.approval-token.enabled false\nE' 'parsed: <<- strips the tabs before the inner shell joins lines' )
+    assert_exit 2 Bash $'bash <<-\'E\'\n\tg\\\n\tff set gss.approval-token.enabled false\nE' 'parsed: <<- strips the tabs before the inner shell joins lines'
+    # review of #475 (97da8f3c): the parse-once cache keys on stdin too
+    assert_exit 2 Bash $'sh -c sh </dev/null && sh -c sh <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: a script seen first without stdin is read again with it'
+    assert_exit 2 Bash "eval bash </dev/null; eval bash <<< \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: eval bash with a here-string after one without'
+    # agy review of #475 (97da8f3c)
+    assert_exit 2 Bash "true | echo 'gff set gss.approval-token.enabled false' | bash" 'parsed: a 3-stage pipe into bash'
+    assert_exit 2 Bash "command echo 'gff set gss.approval-token.enabled false' | bash" 'parsed: command echo | bash'
+    assert_exit 2 Bash "printf '%s %s %s %s\\n' gff set gss.approval-token.enabled false | bash" 'parsed: printf fills its format'
+    assert_exit 2 Bash "printf '%b\\n' '\\0147ff set gss.approval-token.enabled false' | bash" 'parsed: printf %b decodes its argument'
+    assert_exit 2 Bash "env -S \$'-a 1=2 \\x67ff set gss.approval-token.enabled false'" 'parsed: env -S -a value is not an assignment'
+    assert_exit 2 Bash "env -S \$'\\x67ff\\rset\\rgss.approval-token.enabled\\rfalse'" 'parsed: env -S splits on CR' )
   # a gss too old for --format: argv exits 1, the text check stands alone and
   # whatever it printed is dropped
   OLD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-oldgss.XXXXXX")"
