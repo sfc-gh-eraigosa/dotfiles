@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -104,22 +105,54 @@ func token(s string) string {
 	return strings.Join(strings.Fields(s), "_")
 }
 
-// wrappers run the command after their options; nested looks past them.
-// The value lists the options that take a separate argument.
-var wrappers = map[string]string{
-	"env": "uSC", "command": "", "builtin": "", "exec": "a", "nohup": "",
-	"sudo": "ugpChDrtUT", "doas": "uC", "time": "fo", "nice": "n",
-	"timeout": "sk", "setsid": "", "stdbuf": "ioe", "xargs": "aEdIiLlnPs",
+// A wrapper runs the command after its options; nested looks past them.
+type wrapper struct {
+	short string   // short options that take a value: -u x, -ux
+	long  []string // long options that take a value: --user x, --user=x
 }
 
-// skipWrappers returns the index of the command a run of wrappers runs.
-func skipWrappers(words []string) int {
+var wrappers = map[string]wrapper{
+	"env":     {"uSCP", []string{"--unset", "--chdir", "--split-string"}},
+	"command": {}, "builtin": {}, "nohup": {}, "setsid": {},
+	"exec":    {"a", nil},
+	"sudo":    {"ugpChDrtUT", []string{"--user", "--group", "--host", "--prompt", "--chdir", "--close-from", "--role", "--type", "--command-timeout", "--other-user"}},
+	"doas":    {"uC", nil},
+	"time":    {"fo", []string{"--format", "--output"}},
+	"nice":    {"n", []string{"--adjustment"}},
+	"timeout": {"sk", []string{"--signal", "--kill-after"}},
+	"stdbuf":  {"ioe", []string{"--input", "--output", "--error"}},
+	"xargs":   {"aEdIiLlnPs", []string{"--arg-file", "--delimiter", "--max-args", "--max-procs", "--max-lines", "--max-chars", "--process-slot-var"}},
+}
+
+// shortValue reads a cluster of short options (-tp, -uroot, -oX=y) as getopt
+// does: the first letter that takes a value takes the rest of the word, or
+// the next word when it is last. It returns that letter (0 for none), its
+// value, and whether the next word was taken.
+func shortValue(w, opts string, next []string) (byte, string, bool) {
+	for k := 1; k < len(w); k++ {
+		if strings.IndexByte(opts, w[k]) >= 0 {
+			if k+1 < len(w) {
+				return w[k], w[k+1:], false
+			}
+			if len(next) > 0 {
+				return w[k], next[0], true
+			}
+			return w[k], "", false
+		}
+	}
+	return 0, "", false
+}
+
+// skipWrappers returns the index of the command a run of wrappers runs, and
+// the strings env -S splits into a command line of their own.
+func skipWrappers(words []string) (int, []string) {
+	var split []string
 	i := 0
 	for i < len(words) {
 		name := path.Base(words[i])
-		opts, ok := wrappers[name]
+		wr, ok := wrappers[name]
 		if !ok {
-			return i
+			return i, split
 		}
 		i++
 	options:
@@ -129,12 +162,31 @@ func skipWrappers(words []string) int {
 			case w == "--":
 				i++
 				break options
+			case name == "env" && w == "-":
+				i++
 			case name == "env" && strings.Contains(w, "=") && !strings.HasPrefix(w, "-"):
 				i++
+			case strings.HasPrefix(w, "--"):
+				i++
+				k, v, attached := strings.Cut(w, "=")
+				if !slices.Contains(wr.long, k) {
+					continue
+				}
+				if !attached && i < len(words) {
+					v = words[i]
+					i++
+				}
+				if name == "env" && k == "--split-string" {
+					split = append(split, v)
+				}
 			case strings.HasPrefix(w, "-") && len(w) > 1:
 				i++
-				if !strings.HasPrefix(w, "--") && strings.ContainsRune(opts, rune(w[len(w)-1])) {
+				letter, v, took := shortValue(w, wr.short, words[i:])
+				if took {
 					i++
+				}
+				if name == "env" && letter == 'S' && v != "" {
+					split = append(split, v)
 				}
 			default:
 				break options
@@ -144,26 +196,27 @@ func skipWrappers(words []string) int {
 			i++ // the duration
 		}
 	}
-	return i
+	return i, split
 }
 
 // nested returns the shell scripts a command hands to another shell: the -c
 // script of bash/sh/dash/zsh/ksh (else its heredoc or here-string), eval's
-// arguments, and the remote command of ssh, after any wrappers.
+// arguments, the remote command of ssh, and env -S's string, after any
+// wrappers.
 func nested(words []string, redirs []*syntax.Redirect) []string {
-	i := skipWrappers(words)
+	i, split := skipWrappers(words)
 	if i >= len(words) {
-		return nil
+		return split
 	}
 	args := words[i+1:]
 	switch path.Base(words[i]) {
 	case "bash", "sh", "dash", "zsh", "ksh":
-		return shellScripts(args, redirs)
+		return append(split, shellScripts(args, redirs)...)
 	case "eval":
 		if len(args) > 0 && args[0] == "--" {
 			args = args[1:]
 		}
-		return []string{strings.Join(args, " ")}
+		return append(split, strings.Join(args, " "))
 	case "ssh":
 		j := 0
 		for j < len(args) && strings.HasPrefix(args[j], "-") {
@@ -172,23 +225,23 @@ func nested(words []string, redirs []*syntax.Redirect) []string {
 			if a == "--" {
 				break
 			}
-			// an option that takes a value, last in a cluster: -p 22, -tp 22
-			if !strings.HasPrefix(a, "--") && len(a) > 1 && strings.ContainsRune("BbcDEeFIiJLlmOoPpQRSWw", rune(a[len(a)-1])) {
+			if _, _, took := shortValue(a, "BbcDEeFIiJLlmOoPpQRSWw", args[j:]); took {
 				j++
 			}
 		}
 		if j+1 < len(args) {
-			return []string{strings.Join(args[j+1:], " ")}
+			return append(split, strings.Join(args[j+1:], " "))
 		}
 	}
-	return nil
+	return split
 }
 
 // shellScripts is what a shell runs from its arguments and redirections:
-// the first operand after its options when one of them has c, else the
-// body of its heredoc or here-string.
+// the first operand after its options when one of them has c; else, when
+// there is no script file operand (or -s says read stdin), the body of its
+// heredoc or here-string.
 func shellScripts(args []string, redirs []*syntax.Redirect) []string {
-	c, j := false, 0
+	c, s, j := false, false, 0
 options:
 	for ; j < len(args); j++ {
 		a := args[j]
@@ -200,8 +253,9 @@ options:
 			break options
 		case a == "-o" || a == "+o" || a == "-O" || a == "+O":
 			j++
-		case a[0] == '-' && !strings.HasPrefix(a, "--") && strings.ContainsRune(a, 'c'):
-			c = true
+		case a[0] == '-' && !strings.HasPrefix(a, "--"):
+			c = c || strings.ContainsRune(a, 'c')
+			s = s || strings.ContainsRune(a, 's')
 		}
 	}
 	if c {
@@ -209,6 +263,9 @@ options:
 			return []string{args[j]}
 		}
 		return nil
+	}
+	if j < len(args) && !s {
+		return nil // stdin is the script's data, not a script
 	}
 	var docs []string
 	for _, r := range redirs {
@@ -387,17 +444,17 @@ func isHex(c byte) bool {
 	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
 }
 
-// cleanPaths cleans the path after the last = (so --output=a/../b and
-// X=a//b are cleaned too) when it has a //, /./ or /../ in it and no
-// space (a path, not a sentence).
+// cleanPaths resolves //, /./ and /../ in a word the way the kernel would
+// read it as a path. A leading NAME= or --flag= (no / before the first =)
+// stays as it is; an = later in the word is part of the path
+// (~/.config/a=b/../gff). Spaces are part of the path too ("a b/../gff").
 func cleanPaths(s string) string {
 	head, p := "", s
-	if i := strings.LastIndexByte(s, '='); i >= 0 {
+	if i := strings.IndexByte(s, '='); i >= 0 && !strings.Contains(s[:i], "/") {
 		head, p = s[:i+1], s[i+1:]
 	}
-	if strings.ContainsAny(p, " \t\n") ||
-		!strings.Contains(p, "//") && !strings.Contains(p, "/./") && !strings.Contains(p, "/../") &&
-			!strings.HasSuffix(p, "/.") && !strings.HasSuffix(p, "/..") {
+	if !strings.Contains(p, "//") && !strings.Contains(p, "/./") && !strings.Contains(p, "/../") &&
+		!strings.HasSuffix(p, "/.") && !strings.HasSuffix(p, "/..") {
 		return s
 	}
 	c := path.Clean(p)

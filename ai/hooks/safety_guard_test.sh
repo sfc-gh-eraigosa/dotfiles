@@ -598,6 +598,16 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     assert_exit 2 Bash "bash <<< \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: a here-string fed to bash is read'
     assert_exit 2 Bash "env bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env bash -c is read'
     assert_exit 2 Bash 'env "X=a cat" rm ~/.config/gff/config.yaml' 'parsed: a quoted space in an env arg is not the command'
+    # reviews of #475 (ffd41576)
+    assert_exit 2 Bash "rm ~/\$'\\x2e'config/a=b/../gff/config.yaml" 'parsed: an = inside a path is part of the path'
+    assert_exit 2 Bash 'rm ~/.config/"a b"/../gff/config.yaml' 'parsed: a space inside a path is part of the path'
+    assert_exit 2 Bash "ssh -oBatchMode=no host \$'\\x67ff' set gss.approval-token.enabled false" 'parsed: ssh -oK=v does not take the host'
+    assert_exit 2 Bash "sudo -uroot bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: sudo -uroot bash -c is read'
+    assert_exit 2 Bash "timeout -k5s 10 bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: timeout -k5s bash -c is read'
+    assert_exit 2 Bash "env - bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env - bash -c is read'
+    assert_exit 2 Bash "env --unset FOO bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env --unset FOO bash -c is read'
+    assert_exit 2 Bash "env -S \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env -S splits its string'
+    assert_exit 0 Bash $'bash ./setup.sh <<\'IN\'\ncat ~/.config/gff/config.yaml > /tmp/x\nIN' "parsed: a script file's stdin is its data"
     assert_exit 0 Bash 'gh pr comment 1 --body "x > ~/.config/gff/config.yaml"' 'parsed: a > inside a message is text'
     assert_exit 0 Bash 'git commit -m "gff set gss.approval-token.enabled false is refused"' 'parsed: a commit message naming gff set is text' )
 else
