@@ -140,6 +140,11 @@ func TestLines(t *testing.T) {
 		{"echo | cat | bash", "echo 'gss push' | cat | bash", []string{"gss push", "echo gss_push", "cat", "bash"}},
 		{"echo | tee log | bash", "echo 'gss push' | tee log | bash", []string{"gss push", "echo gss_push", "tee log", "bash"}},
 		{"echo | cat file | bash is the file", "echo 'gss push' | cat f | bash", []string{"echo gss_push", "cat f", "bash"}},
+		// agy review of #475 (932acf3d)
+		{"echo | env -S bash", "echo 'gss push' | env -S bash", []string{"gss push", "echo gss_push", "env -S bash", "bash"}},
+		{"env -S echo | bash", "env -S 'echo gss' push | bash", []string{"gss push", "env -S echo_gss push", "echo gss push", "bash"}},
+		{"cat -u heredoc | bash", "cat -u <<E | bash\ngss push\nE\n", []string{"gss push", "cat -u <<E", "bash"}},
+		{"cat -- heredoc | bash", "cat -- <<E | bash\ngss push\nE\n", []string{"gss push", "cat -- <<E", "bash"}},
 		{"bash -s reads stdin", "bash -s x <<'IN'\ngss push\nIN\n", []string{"bash -s x <<IN", "gss push"}},
 		{"message text is one word", `git commit -m "gss push; gff set x"`, []string{"git commit -m gss_push_gff_set_x"}},
 	}
@@ -299,5 +304,40 @@ func TestPrintfText(t *testing.T) {
 	}
 	if d := time.Since(start); d > time.Second {
 		t.Errorf("printfText took %v on a repeating 500 KB format", d)
+	}
+}
+
+// echo -e / printf %b and printf formats, as bash prints them (agy review
+// of #475, 932acf3d; each want checked with od -c against bash 5).
+func TestPrintEscapes(t *testing.T) {
+	echo := map[string]string{
+		`echo \\c` + "\n" + `\0147ss push`: "echo \\c\ngss push",
+		`\x00` + "\n" + `\x67ss push`:      "\x00\ngss push",
+		`a\cb`:                             "a",
+		`\u0067ss`:                         "gss",
+	}
+	for in, want := range echo {
+		if got := echoEscapes(in); got != want {
+			t.Errorf("echoEscapes(%q) = %q, want %q", in, got, want)
+		}
+	}
+	printf := []struct {
+		format string
+		args   []string
+		want   string
+	}{
+		{`%*s%s\n`, []string{"0", "g", "ss push"}, "gss push\n"},
+		{`%c%s\n`, []string{"gx", "ss push"}, "gss push\n"},
+		{`%.*s push`, []string{"3", "gssx"}, "gss push"},
+		{`a\x00` + "\n" + `b`, nil, "a\x00\nb"},
+		{`a\cb`, nil, `a\cb`},
+	}
+	for _, c := range printf {
+		if got := printfText(c.format, c.args); got != c.want {
+			t.Errorf("printfText(%q, %q) = %q, want %q", c.format, c.args, got, c.want)
+		}
+	}
+	if got := ansiC(`\c?`); got != "\x7f" {
+		t.Errorf(`ansiC(\c?) = %q, want DEL`, got)
 	}
 }

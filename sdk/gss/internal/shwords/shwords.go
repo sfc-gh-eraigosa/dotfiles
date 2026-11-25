@@ -55,10 +55,7 @@ func (w *walk) script(src string, depth int, stdin []*syntax.Redirect) {
 	}
 	// the same text with another stdin is another script, and one first
 	// seen deeper has had less depth left to follow its own nesting
-	key := src
-	for _, r := range stdin {
-		key += fmt.Sprintf("\x00%p", r)
-	}
+	key := src + "\x00" + strings.Join(stdinScripts(stdin), "\x00")
 	if d, ok := w.seen[key]; ok && d <= depth {
 		return
 	}
@@ -530,13 +527,12 @@ func pipedScript(b *syntax.BinaryCmd) []string {
 	if !ok {
 		return nil
 	}
-	ws := callWords(left)
-	i, split := skipWrappers(ws)
-	if split != nil || i >= len(ws) {
+	ws := commandWords(callWords(left))
+	if ws == nil {
 		return nil
 	}
-	args := ws[i+1:]
-	switch path.Base(ws[i]) {
+	args := ws[1:]
+	switch path.Base(ws[0]) {
 	case "echo":
 		for len(args) > 0 && strings.HasPrefix(args[0], "-") {
 			args = args[1:]
@@ -553,40 +549,78 @@ func pipedScript(b *syntax.BinaryCmd) []string {
 		}
 		return []string{printfText(args[0], args[1:])}
 	case "cat":
-		if len(args) == 0 || (len(args) == 1 && args[0] == "-") {
+		if catReadsStdin(args) {
 			return stdinScripts(x.Redirs)
 		}
 	}
 	return nil
 }
 
-// echoEscapes decodes echo -e's escapes: as $'...', but an octal escape is
-// \0 and up to three more digits (\0147 is g).
+// echoEscapes decodes echo -e's (and printf %b's) escapes: \\, \n and the
+// other letters, \0NNN octal, \xHH, \uHHHH, \UHHHHHHHH; a NUL is printed and
+// the text goes on, and \c ends all output.
 func echoEscapes(s string) string {
+	return printEscapes(s, false)
+}
+
+// formatEscapes decodes the text of a printf format between conversions:
+// as echo -e, but an octal escape is \NNN and \c is not special.
+func formatEscapes(s string) string {
+	return printEscapes(s, true)
+}
+
+func printEscapes(s string, format bool) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
-		if s[i] == '\\' && i+1 < len(s) && s[i+1] == '0' {
-			j := i + 2
-			for j < len(s) && j < i+5 && s[j] >= '0' && s[j] <= '7' {
-				j++
-			}
-			v, _ := strconv.ParseUint("0"+s[i+2:j], 8, 16)
-			b.WriteByte(byte(v))
-			i = j - 1
+		if s[i] != '\\' || i+1 == len(s) {
+			b.WriteByte(s[i])
 			continue
 		}
-		if s[i] == '\\' && i+1 < len(s) && s[i+1] == 'c' {
-			break // \c: no further output
+		i++
+		c := s[i]
+		if e, ok := simpleEscapes[c]; ok {
+			b.WriteByte(e)
+			continue
 		}
-		j := i
-		for j < len(s) && !(s[j] == '\\' && j+1 < len(s) && (s[j+1] == '0' || s[j+1] == 'c')) {
-			j++
+		switch {
+		case c == '\\':
+			b.WriteByte('\\')
+		case c == 'c' && !format:
+			return b.String()
+		case c >= '0' && c <= '7' && (format || c == '0'):
+			j := i
+			if !format {
+				j++ // \0 then up to three digits
+			}
+			k := j
+			for k < len(s) && k < j+3 && s[k] >= '0' && s[k] <= '7' {
+				k++
+			}
+			v, _ := strconv.ParseUint("0"+s[j:k], 8, 16)
+			b.WriteByte(byte(v))
+			i = k - 1
+		case c == 'x' || c == 'u' || c == 'U':
+			width := map[byte]int{'x': 2, 'u': 4, 'U': 8}[c]
+			j := i + 1
+			for j < len(s) && j < i+1+width && isHex(s[j]) {
+				j++
+			}
+			if j == i+1 {
+				b.WriteByte('\\')
+				b.WriteByte(c)
+				continue
+			}
+			v, _ := strconv.ParseUint(s[i+1:j], 16, 32)
+			if c != 'x' && v >= utf8.RuneSelf {
+				b.WriteRune(rune(v))
+			} else {
+				b.WriteByte(byte(v))
+			}
+			i = j - 1
+		default:
+			b.WriteByte('\\')
+			b.WriteByte(c)
 		}
-		if j == i {
-			j++
-		}
-		b.WriteString(ansiC(s[i:j]))
-		i = j - 1
 	}
 	return b.String()
 }
@@ -610,19 +644,31 @@ func printfText(format string, args []string) string {
 			if format[i] != '%' || i+1 == len(format) {
 				continue
 			}
-			b.WriteString(ansiC(format[lit:i]))
+			b.WriteString(formatEscapes(format[lit:i]))
 			j := i + 1
 			for j < len(format) && strings.IndexByte("-+ #0123456789*", format[j]) >= 0 {
+				if format[j] == '*' && len(args) > 0 {
+					args, used = args[1:], true // the width is an argument
+				}
 				j++
 			}
 			prec := -1
 			if j < len(format) && format[j] == '.' {
 				j++
-				k := j
-				for j < len(format) && format[j] >= '0' && format[j] <= '9' {
+				if j < len(format) && format[j] == '*' {
+					prec = 0
+					if len(args) > 0 {
+						prec, _ = strconv.Atoi(args[0])
+						args, used = args[1:], true
+					}
 					j++
+				} else {
+					k := j
+					for j < len(format) && format[j] >= '0' && format[j] <= '9' {
+						j++
+					}
+					prec, _ = strconv.Atoi(format[k:j])
 				}
-				prec, _ = strconv.Atoi(format[k:j])
 			}
 			if j == len(format) {
 				lit = i
@@ -640,13 +686,16 @@ func printfText(format string, args []string) string {
 			if format[j] == 'b' {
 				arg = echoEscapes(arg)
 			}
+			if format[j] == 'c' && len(arg) > 1 {
+				arg = arg[:1]
+			}
 			if prec >= 0 && prec < len(arg) && (format[j] == 's' || format[j] == 'b') {
 				arg = arg[:prec]
 			}
 			b.WriteString(arg)
 		}
 		if lit < len(format) && b.Len() < maxPrinted {
-			b.WriteString(ansiC(format[lit:]))
+			b.WriteString(formatEscapes(format[lit:]))
 		}
 		if !used || b.Len() >= maxPrinted {
 			break
@@ -662,12 +711,12 @@ func printfText(format string, args []string) string {
 // readsScriptFromStdin reports whether a command (past its wrappers) is a
 // shell that reads its script from stdin, or source / . of stdin.
 func readsScriptFromStdin(words []string) bool {
-	i, split := skipWrappers(words)
-	if split != nil || i >= len(words) {
+	ws := commandWords(words)
+	if ws == nil {
 		return false
 	}
-	args := words[i+1:]
-	switch path.Base(words[i]) {
+	args := ws[1:]
+	switch path.Base(ws[0]) {
 	case "bash", "sh", "dash", "zsh", "ksh":
 		c, j, s := shellOptions(args)
 		return !c && (j >= len(args) || s || isStdin(args[j]))
@@ -861,6 +910,9 @@ func ansiC(s string) string {
 			}
 			i++
 			v = uint64(s[i] & 0x1f)
+			if s[i] == '?' {
+				v = 0x7f
+			}
 			if s[i] == '\\' && i+1 < len(s) && s[i+1] == '\\' {
 				i++ // \c\\ is control-backslash, both backslashes taken
 			}
@@ -976,17 +1028,43 @@ func passesStdin(st *syntax.Stmt) bool {
 	if !ok || len(st.Redirs) > 0 {
 		return false
 	}
-	ws := callWords(call)
-	i, split := skipWrappers(ws)
-	if split != nil || i >= len(ws) {
+	ws := commandWords(callWords(call))
+	if ws == nil {
 		return false
 	}
-	args := ws[i+1:]
-	switch path.Base(ws[i]) {
+	switch path.Base(ws[0]) {
 	case "tee":
 		return true
 	case "cat":
-		return len(args) == 0 || (len(args) == 1 && args[0] == "-")
+		return catReadsStdin(ws[1:])
 	}
 	return false
+}
+
+// commandWords is a command's words from its name on, past its wrappers and
+// any env -S split (as many as nested() follows); nil when there is none.
+func commandWords(ws []string) []string {
+	for d := 0; d <= maxDepth; d++ {
+		i, split := skipWrappers(ws)
+		if split == nil {
+			if i >= len(ws) {
+				return nil
+			}
+			return ws[i:]
+		}
+		ws = split
+	}
+	return nil
+}
+
+// catReadsStdin reports whether cat's arguments leave it reading stdin:
+// none, -, -u (ignored by GNU cat), and -- before -.
+func catReadsStdin(args []string) bool {
+	for len(args) > 0 && args[0] == "-u" {
+		args = args[1:]
+	}
+	if len(args) > 0 && args[0] == "--" {
+		args = args[1:]
+	}
+	return len(args) == 0 || (len(args) == 1 && args[0] == "-")
 }
