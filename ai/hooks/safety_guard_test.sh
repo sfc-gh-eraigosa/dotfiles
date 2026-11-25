@@ -296,7 +296,7 @@ rm -f "$HOME/.config/gss/approval.token"
 GFF_STUB="$(mktemp -d "${TMPDIR:-/tmp}/sg-gff.XXXXXX")"
 # The stub answers only the exact question the hook must ask; any other
 # arguments exit 2 (gff's "unknown key"), which reads as off.
-printf '#!/bin/sh\n[ "$*" = "enabled gss.approval-token.enabled" ] || exit 2\nexit ${GFF_STUB_RC:-1}\n' > "$GFF_STUB/gff"
+printf '#!/bin/sh\n[ "$*" = "--source com.github.sfc-gh-eraigosa.dotfiles enabled gss.approval-token.enabled" ] || exit 2\nexit ${GFF_STUB_RC:-1}\n' > "$GFF_STUB/gff"
 chmod +x "$GFF_STUB/gff"
 SG_TMP+=("$GFF_STUB")
 # The variable only turns the check on: off, false or 0 cannot turn a gff on
@@ -343,7 +343,207 @@ done
   assert_exit 0 Bash "gss push"            "gff flag off (the default): gss push runs" )
 ( export GSS_REQUIRE_APPROVAL=on PATH="$GFF_STUB:$PATH" GFF_STUB_RC=1
   assert_exit 2 Bash "gss push"            "GSS_REQUIRE_APPROVAL=on beats a gff off" )
+# gss spelled another way is still gss (#472): with the check on and no token,
+# each is blocked; paths and words that only contain "gss" are not.
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_STUB:$PATH" GFF_STUB_RC=0
+  assert_exit 2 Bash '"gss" push'                          'quoted "gss" push is gated'
+  assert_exit 2 Bash '\gss push'                           'backslashed \gss push is gated'
+  assert_exit 2 Bash 'g"s"s feature merged'                'split quotes g"s"s feature merged is gated'
+  assert_exit 2 Bash '$HOME/opt/bin/gss feature pr --ready' '$HOME path to gss is gated'
+  # shellcheck disable=SC2088 # the literal ~ is the command text under test
+  assert_exit 2 Bash '~/opt/bin/gss feature restack'       '~ path to gss is gated'
+  assert_exit 2 Bash '/usr/local/bin/gss sync'             'absolute path to gss is gated'
+  assert_exit 2 Bash 'gss feature pr "--ready"'            'quoted --ready is gated'
+  assert_exit 2 Bash 'XDG_DATA_HOME=/x "gss" feature pr --ready' 'env prefix plus quoted gss is gated'
+  assert_exit 0 Bash 'git add sdk/gss'                     'a repo path ending in gss is not a gss command'
+  assert_exit 0 Bash 'ls ~/opt/bin/gss'                    'naming the gss binary is not running it'
+  assert_exit 0 Bash 'cd sdk/gss && go test ./...'         'cd into a gss dir is not a gss command'
+  # more spellings, from the reviews of #473
+  assert_exit 2 Bash "'gss' push"                          "single-quoted 'gss' push is gated"
+  assert_exit 2 Bash "g's's push"                          "split single quotes g's's push is gated"
+  # shellcheck disable=SC2016 # the literal ${HOME} is the command text under test
+  assert_exit 2 Bash '${HOME}/opt/bin/gss sync'            '${HOME} path to gss is gated'
+  # shellcheck disable=SC2088 # the literal ~ is the command text under test
+  assert_exit 2 Bash '~/gss push'                          'gss directly under ~ is gated'
+  # shellcheck disable=SC2016 # the literal $HOME is the command text under test
+  assert_exit 2 Bash '$HOME/gss push'                      'gss directly under $HOME is gated'
+  assert_exit 2 Bash 'cd /tmp && ./gss push'               './gss push is gated'
+  assert_exit 2 Bash '../bin/gss sync'                     '../bin/gss sync is gated'
+  assert_exit 2 Bash '{ gss push; }'                       'gss push; in a brace group is gated'
+  assert_exit 2 Bash 'if true; then gss push; fi'          'gss push; in an if is gated'
+  assert_exit 2 Bash '(gss push)'                          'gss push in a subshell is gated'
+  # shellcheck disable=SC2016 # the $(...) is the command text under test
+  assert_exit 2 Bash 'echo $(gss feature pr --ready)'      'feature pr --ready) in $(...) is gated'
+  # shellcheck disable=SC2016 # the backticks are the command text under test
+  assert_exit 2 Bash '`gss push`'                          'gss push in backticks is gated'
+  assert_exit 2 Bash 'gss push;true'                       'gss push;true is gated'
+  assert_exit 2 Bash 'gss sync|cat'                        'gss sync|cat is gated'
+  assert_exit 2 Bash 'gss feature merged&& true'           'feature merged&& is gated'
+  assert_exit 2 Bash 'gss feature pr --ready=true'         'feature pr --ready=true is gated'
+  assert_exit 2 Bash 'gss push>/dev/null'                  'gss push>/dev/null is gated'
+  assert_exit 2 Bash 'gss sync</dev/null'                  'gss sync</dev/null is gated'
+  assert_exit 2 Bash 'gss feature pr --ready>/dev/null'    'feature pr --ready>/dev/null is gated'
+  assert_exit 2 Bash "\$'gss' push"                        "\$'gss' push is gated"
+  assert_exit 2 Bash '$"gss" push'                         '$"gss" push is gated'
+  assert_exit 2 Bash $'g\\\nss push'                       'g\<nl>ss push (one word) is gated'
+  assert_exit 2 Bash $'# \\\ngss push'                     'a comment ending in a backslash does not hide gss push'
+  assert_exit 2 Bash $'gss \\\n push'                      'gss, backslash-newline, push is gated'
+  assert_exit 0 Bash 'gss pushd'                           'a longer word is not the verb'
+  assert_exit 0 Bash 'gss feature pr --readyx'             '--readyx is not --ready'
+  assert_exit 0 Bash 'cd ../gss && ls'                     'cd into ../gss is not a gss command' )
 rm -rf "$GFF_STUB"
+# The hook asks gff from / with --source (review of #473): a broken
+# .github/gff/features.yaml in the cwd must not read as off.
+GFF_CWD_STUB=$(mktemp -d "${TMPDIR:-/tmp}/sg-gffcwd.XXXXXX"); SG_TMP+=("$GFF_CWD_STUB")
+mkdir -p "$GFF_CWD_STUB/bin" "$GFF_CWD_STUB/repo/.github/gff"
+cat > "$GFF_CWD_STUB/bin/gff" <<'STUB'
+#!/bin/sh
+# Like gff: a broken features.yaml in the cwd makes every answer fail.
+[ -f .github/gff/features.yaml ] && exit 1
+case " $* " in *" --source com.github.sfc-gh-eraigosa.dotfiles "*) exit 0 ;; esac
+exit 1
+STUB
+chmod +x "$GFF_CWD_STUB/bin/gff"
+echo 'garbage: [' > "$GFF_CWD_STUB/repo/.github/gff/features.yaml"
+( unset GSS_REQUIRE_APPROVAL; export PATH="$GFF_CWD_STUB/bin:$PATH"; cd "$GFF_CWD_STUB/repo" || exit 1
+  assert_exit 2 Bash 'gss push'                            'a broken gff file in the cwd repo does not turn the check off' )
+
+# The approval flag is the operator's (#472): an assistant may read it, never
+# set, unset or edit it. Independent of the flag's value.
+assert_exit 2 Bash "gff set gss.approval-token.enabled false"           "gff set of the approval flag is refused"
+assert_exit 2 Bash "gff unset gss.approval-token.enabled"               "gff unset of the approval flag is refused"
+assert_exit 2 Bash "\$HOME/opt/bin/gff set gss.approval-token.enabled true" "gff by path, set of the approval flag is refused"
+assert_exit 2 Bash "echo 'x: 1' >> ~/.config/gff/config.yaml"            "appending to the gff override file is refused"
+assert_exit 2 Bash "sed -i.bak 's/true/false/' ~/.config/gff/config.yaml"   "sed -i.bak on the gff override file is refused"
+assert_exit 2 Bash "rm ~/.config/gff/config.yaml"                       "removing the gff override file is refused"
+assert_exit 0 Bash "gff get gss.approval-token.enabled"                 "reading the approval flag is fine"
+assert_exit 0 Bash "gff enabled gss.approval-token.enabled"             "asking whether the approval flag is on is fine"
+assert_exit 0 Bash "cat ~/.config/gff/config.yaml"                      "reading the gff override file is fine"
+assert_exit 0 Bash "gff set herdr.theme dark"                           "gff set of another flag is fine"
+# ~/.config/gff is read-only to an assistant (reviews of #473): an allowlist of
+# readers, so writers nobody listed are refused too.
+assert_exit 2 Bash "cat x > ~/.config/gff/config.yaml"                  "redirecting into the gff override file is refused"
+assert_exit 2 Bash "cat x 2>&1 > ~/.config/gff/config.yaml"             "redirecting into it after 2>&1 is refused"
+assert_exit 2 Bash "echo x | tee -a ~/.config/gff/config.yaml"          "tee into it is refused"
+assert_exit 2 Bash "cp /tmp/x ~/.config/gff/"                           "copying into the gff dir is refused"
+assert_exit 2 Bash "mv ~/.config/gff/config.yaml /tmp/x"                "moving it away is refused"
+assert_exit 2 Bash "rm -rf ~/.config/gff"                               "removing the gff dir is refused"
+assert_exit 2 Bash "mv ~/.config/gff ~/.config/gff.bak"                 "moving the gff dir is refused"
+assert_exit 2 Bash "rm ~/.config/gff/config.*"                          "a glob over it is refused"
+assert_exit 2 Bash "cd ~/.config/gff && rm config.yaml"                 "cd into the gff dir, then rm, is refused"
+assert_exit 2 Bash "/bin/rm ~/.config/gff/config.yaml"                  "rm by path is refused"
+assert_exit 2 Bash "(rm ~/.config/gff/config.yaml)"                     "rm in a subshell is refused"
+assert_exit 2 Bash "/usr/bin/truncate -s 0 ~/.config/gff/config.yaml"   "truncate by path is refused"
+assert_exit 2 Bash "sed --in-place 's/a/b/' ~/.config/gff/config.yaml"  "sed --in-place is refused"
+assert_exit 2 Bash "sed -e 's/a/b/' -i ~/.config/gff/config.yaml"       "sed with -i late is refused"
+assert_exit 2 Bash "perl -e 's/a/b/' -pi ~/.config/gff/config.yaml"     "perl -pi is refused"
+assert_exit 2 Bash "unlink ~/.config/gff/config.yaml"                   "unlink is refused"
+assert_exit 2 Bash "chmod 000 ~/.config/gff/config.yaml"                "chmod is refused"
+assert_exit 2 Bash "dd if=/tmp/x of=~/.config/gff/config.yaml"          "dd onto it is refused"
+assert_exit 2 Bash "sudo rm ~/.config/gff/config.yaml"                  "sudo rm is refused"
+assert_exit 0 Bash "cat ~/.config/gff/config.yaml 2>/dev/null"          "reading it with stderr to /dev/null is fine"
+assert_exit 0 Bash "diff ~/.config/gff/config.yaml /tmp/x 2>&1"         "diffing it is fine"
+assert_exit 0 Bash "cat ~/.config/gff/config.yaml > /tmp/bak"           "saving a copy of it elsewhere is fine"
+assert_exit 0 Bash "grep x ~/.config/gff/config.yaml; rm -f /tmp/x"     "a read, then an rm of another file, is fine"
+assert_exit 0 Bash "ls -la ~/.config/gff/ | head"                       "listing the dir is fine"
+assert_exit 0 Bash "jq . < /dev/null; yq . ~/.config/gff/config.yaml"   "yq of it is fine"
+# second review of #473: quoted text is one part, flags before set, snapshots
+assert_exit 0 Bash "git commit -m \"gss: notes
+
+The user override lives in ~/.config/gff/config.yaml; rm is refused (see #472).\"" "a multi-line commit message that mentions the path is fine"
+assert_exit 0 Bash "git commit -m \"the override (~/.config/gff/config.yaml) is the operator's\"" "a message with ( and ' is fine"
+assert_exit 0 Bash "git commit -m 'the override (~/.config/gff/config.yaml); see #472'" "a single-quoted message with ( and ; is fine"
+assert_exit 0 Bash "gh pr comment 1 --body \"cp of ~/.config/gff/config.yaml is refused; use cat\"" "a PR comment that mentions the path is fine"
+assert_exit 0 Bash "tree ~/.config/gff"                                 "tree of the gff dir is fine"
+assert_exit 2 Bash "gff --source x set gss.approval-token.enabled false" "gff with a flag before set is refused"
+assert_exit 2 Bash "gff --source=x unset gss.approval-token.enabled"    "gff --source= before unset is refused"
+assert_exit 2 Bash "git config --file ~/.config/gff/config.yaml a.b c"  "git config --file on it is refused"
+assert_exit 2 Bash "rm -rf ~/.local/share/gff"                          "removing gff's snapshots is refused"
+assert_exit 2 Bash "echo \"\$(rm ~/.config/gff/config.yaml)\""          "rm inside \$( ) inside double quotes is refused"
+assert_exit 2 Bash "echo \"\`rm ~/.config/gff/config.yaml\`\""          "rm in backticks inside double quotes is refused"
+assert_exit 2 Bash "echo 'x'; rm ~/.config/gff/config.yaml"             "rm after a quoted echo is refused"
+# agy review of 8b8b7e31: writer flags on readers, odd paths, newlines
+assert_exit 2 Bash "yq -i '.a = 1' ~/.config/gff/config.yaml"           "yq -i on it is refused"
+assert_exit 2 Bash "yq --inplace 'del(.)' ~/.config/gff/config.yaml"    "yq --inplace on it is refused"
+assert_exit 2 Bash "git config -f ~/.config/gff/config.yaml a.b c"      "git config -f on it is refused"
+assert_exit 2 Bash "git diff --output=~/.config/gff/config.yaml"        "git diff --output onto it is refused"
+assert_exit 2 Bash "tree -o ~/.config/gff/config.yaml /"                "tree -o onto it is refused"
+assert_exit 2 Bash "rm ~/.config//gff/config.yaml"                      "a doubled slash in the path is refused"
+assert_exit 2 Bash "rm ~/.config/./gff/config.yaml"                     "a /./ in the path is refused"
+assert_exit 2 Bash "echo '{}' > ~/.config//gff/config.yaml"             "a redirect with a doubled slash is refused"
+assert_exit 0 Bash "yq '.flags' ~/.config/gff/config.yaml"              "plain yq of it is fine"
+assert_exit 0 Bash $'gff set herdr.theme dark\ngff get gss.approval-token.enabled' "a set of another flag, then a get on the next line, is fine"
+# reviews of dff896fe: bash's quoting, flag text in messages, more writers
+assert_exit 2 Bash 'echo \" ; rm ~/.config/gff/config.yaml ; echo \"'  'an escaped quote does not hide an rm'
+assert_exit 2 Bash 'echo "a\"b"; rm ~/.config/gff/config.yaml'         'an escaped quote inside quotes does not hide an rm'
+assert_exit 2 Bash "echo \$'it\\'s'; rm ~/.config/gff/config.yaml"     "a \$'...' string does not hide an rm"
+assert_exit 2 Bash 'echo "$(cat /dev/null; rm ~/.config/gff/config.yaml)"' 'a second command inside "$( )" is checked'
+assert_exit 2 Bash 'echo "`echo x; rm ~/.config/gff/config.yaml`"'    'a second command inside "` `" is checked'
+assert_exit 2 Bash "git config -f~/.config/gff/config.yaml a.b c"      "git config -f with the path attached is refused"
+assert_exit 2 Bash "git archive -o ~/.config/gff/config.yaml HEAD"     "git archive -o onto it is refused"
+assert_exit 2 Bash "sudo gff set gss.approval-token.enabled false"     "gff behind sudo, set of the flag, is refused"
+assert_exit 2 Bash "env X=1 gff --source x unset gss.approval-token.enabled" "gff behind env, unset of the flag, is refused"
+assert_exit 0 Bash 'git commit -m "gff list shows whether the operator did set gss.approval-token.enabled"' "a commit message about gff set of the flag is fine"
+assert_exit 0 Bash 'gh pr comment 1 --body "run gff set gss.approval-token.enabled false yourself"' "a PR comment that quotes the set command is fine"
+assert_exit 0 Bash 'git commit -m "refuse cp -f into ~/.config/gff"'   "a message with -f and a gff path is fine"
+assert_exit 0 Bash 'git commit -m "safety_guard: refuse > ~/.config/gff/config.yaml"' "a quoted > before a gff path is fine"
+assert_exit 0 Bash 'tail -f ~/.config/gff/config.yaml'                 "tail -f of it is fine"
+assert_exit 2 Bash "yq --in-place '.a = 1' ~/.config/gff/config.yaml"  "yq --in-place on it is refused"
+# agy review of dd1f58a7: shell keywords, $'' quoting, escapes, comments
+assert_exit 2 Bash "{ gff set gss.approval-token.enabled false; }"     "gff set in a brace group is refused"
+assert_exit 2 Bash "if true; then gff set gss.approval-token.enabled false; fi" "gff set after then is refused"
+assert_exit 2 Bash "time gff set gss.approval-token.enabled false"     "gff set behind time is refused"
+assert_exit 2 Bash "! gff unset gss.approval-token.enabled"            "gff unset behind ! is refused"
+assert_exit 2 Bash "2>/dev/null gff set gss.approval-token.enabled false" "gff set behind a redirect is refused"
+assert_exit 2 Bash '\gff set gss.approval-token.enabled false'         'backslashed \gff set is refused'
+assert_exit 2 Bash "gff s\\et gss.approval-token.enabled false"        "a backslash inside set is refused"
+assert_exit 2 Bash "rm ~/.config/\\gff/config.yaml"                    "a backslash in the gff path is refused"
+assert_exit 2 Bash "rm ~/.config/'.'/gff/config.yaml"                  "a quoted . in the path is refused"
+assert_exit 2 Bash 'rm ~/.config/""/gff/config.yaml'                   'an empty quoted segment in the path is refused'
+assert_exit 2 Bash "rm ~/.config/\$'gff'/config.yaml"                  "a \$'gff' path segment is refused"
+assert_exit 2 Bash "\$'gff' set gss.approval-token.enabled false"      "\$'gff' set is refused"
+assert_exit 2 Bash $'echo ok # "\nrm ~/.config/gff/config.yaml'        "a quote in a comment does not hide the next line"
+assert_exit 2 Bash "yq -iy '.a = 1' ~/.config/gff/config.yaml"         "yq -iy on it is refused"
+assert_exit 2 Bash "GIT_CONFIG_GLOBAL=~/.config/gff/config.yaml git config --global a.b c" "an env var naming a gff path is refused"
+assert_exit 2 Bash "git bundle create ~/.config/gff/config.yaml HEAD"  "git bundle create onto it is refused"
+assert_exit 0 Bash 'git commit -m "gss: see #472; the override is ~/.config/gff/config.yaml"' "a message with #472 and ; is fine"
+assert_exit 0 Bash "if test -f ~/.config/gff/config.yaml; then cat ~/.config/gff/config.yaml; fi" "testing for it in an if is fine"
+assert_exit 0 Bash "ls ~/.config/gff # list it"                        "a trailing comment is fine"
+# Claude review of dd1f58a7
+assert_exit 2 Bash $'# operator\'s flag\ngff unset gss.approval-token.enabled' "an apostrophe in a comment does not hide the next line"
+assert_exit 2 Bash "bash -c 'gff set gss.approval-token.enabled false'" "gff set inside bash -c is refused"
+assert_exit 2 Bash "doas gff set gss.approval-token.enabled false"     "gff set behind doas is refused"
+assert_exit 0 Bash "jq . < ~/.config/gff/config.yaml"                  "jq reading it on stdin is fine"
+# Claude review of beab93cc
+assert_exit 2 Bash $'gff set \\\n gss.approval-token.enabled false'   "gff set split by a backslash-newline is refused"
+assert_exit 2 Bash $'rm -rf \\\n ~/.config/gff'                       "rm split by a backslash-newline is refused"
+assert_exit 2 Bash "ssh pi1 gff set gss.approval-token.enabled false"  "gff set over ssh is refused"
+assert_exit 2 Bash "ssh pi1 'gff unset gss.approval-token.enabled'"    "quoted gff unset over ssh is refused"
+assert_exit 2 Bash "eval gff set gss.approval-token.enabled false"     "gff set behind eval is refused"
+assert_exit 0 Bash $'ls -la \\\n ~/.config/gff'                       "a read split by a backslash-newline is fine"
+# agy review of beab93cc
+assert_exit 2 Bash "gff  set gss.approval-token.enabled false"         "gff set with two spaces is refused"
+assert_exit 2 Bash "</dev/null gff set gss.approval-token.enabled false" "gff set behind < is refused"
+assert_exit 2 Bash "> /dev/null gff set gss.approval-token.enabled false" "gff set behind a spaced > is refused"
+assert_exit 2 Bash "gff</dev/null set gss.approval-token.enabled false" "gff< attached, then set, is refused"
+assert_exit 2 Bash "time -p gff set gss.approval-token.enabled false"  "gff set behind time -p is refused"
+assert_exit 2 Bash "eval \"gff set gss.approval-token.enabled false\"" "gff set inside eval \"...\" is refused"
+assert_exit 2 Bash $'(true)# \'\ngff set gss.approval-token.enabled false' "a comment after ) does not hide the next line"
+assert_exit 2 Bash "rm ~/.config/gss/../gff/config.yaml"               "a ../ in the path is refused"
+assert_exit 2 Bash "git -C . bundle create ~/.config/gff/config.yaml HEAD" "git -C . bundle create onto it is refused"
+assert_exit 2 Bash "git format-patch --output-directory ~/.config/gff HEAD~1" "git format-patch into the gff dir is refused"
+assert_exit 2 Bash "gh release download -O ~/.config/gff/config.yaml"  "gh -O onto it is refused"
+assert_exit 2 Bash "gh repo clone o/r ~/.config/gff"                   "gh repo clone into the gff dir is refused"
+assert_exit 0 Bash "tree -f ~/.config/gff"                             "tree -f of the gff dir is fine"
+assert_exit 0 Bash "[[ -f ~/.config/gff/config.yaml ]] && echo yes"   "[[ -f ]] on it is fine"
+# agy review of 895a1f61: backslash-newline joins words; not inside a comment
+assert_exit 2 Bash $'# \\\ngff set gss.approval-token.enabled false'   "a backslash at the end of a comment does not hide the next line"
+assert_exit 2 Bash $'echo ok # \\\nrm ~/.config/gff/config.yaml'       "a comment ending in a backslash does not hide an rm"
+assert_exit 2 Bash $'g\\\nff set gss.approval-token.enabled false'     "g\\<nl>ff set (one word) is refused"
+assert_exit 2 Bash $'rm ~/.config/g\\\nff/config.yaml'                 "a gff path split by a backslash-newline is refused"
+assert_exit 2 Bash $'gff s\\\net gss.approval-token.enabled false'     "s\\<nl>et (one word) is refused"
+assert_exit 2 Bash $'gff \\\n set gss.approval-token.enabled false'    "gff, backslash-newline, then set is refused"
+assert_exit 0 Bash "gh pr comment 1 --body \"the override is ~/.config/gff/config.yaml\"" "a gh comment naming the path is still fine"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"

@@ -1,10 +1,17 @@
 package approval
 
 import (
+	"errors"
 	"os"
-	"os/exec"
+	"os/user"
+	"path/filepath"
 	"strings"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/git"
 )
+
+// errNoGFF: gff is not in any of the dirs gffPATH lists.
+var errNoGFF = errors.New("gff not found")
 
 // FlagKey is the gff flag that turns the approval token on. It is off by
 // default (operator, 2026-11-23: the handshake added a round trip per PR
@@ -18,11 +25,69 @@ const FlagKey = "gss.approval-token.enabled"
 // the check off while the operator has it on.
 const EnvOverride = "GSS_REQUIRE_APPROVAL"
 
-// lookPath and runGFF are swapped in tests.
+// Source is the gff source that declares FlagKey: the dotfiles repo, as
+// `gff install` registers it. gff is asked about it by name, never about the
+// repo gss happens to run in.
+const Source = "com.github.sfc-gh-eraigosa.dotfiles"
+
+// gff is asked with an environment of its own (#472): the user's home from
+// the password database and a fixed PATH, nothing inherited, run from / with
+// --source (reviews of #473). A command that sets PATH, HOME or
+// XDG_* for gss, or a broken .github/gff/features.yaml in the repo it runs
+// in, cannot make gff fail, which would read as off. An operator's own
+// XDG_CONFIG_HOME is ignored too: gff reads ~/.config/gff. When the account
+// has no home (user.Current fails), only the system dirs are searched, and
+// gff missing or failing reads as off, the default.
+//
+// lookPath, runGFF and userHome are swapped in tests.
 var (
-	lookPath = exec.LookPath
-	runGFF   = func(args ...string) error { return exec.Command("gff", args...).Run() }
+	lookPath = cleanLookPath
+	runGFF   = func(args ...string) error {
+		p, err := cleanLookPath("gff")
+		if err != nil {
+			return err
+		}
+		// "/" like the hook: the home dir can be writable or a repo itself.
+		return git.RunIsolated(p, "/", gffEnv(), args...)
+	}
+	userHome = func() string {
+		if u, err := user.Current(); err == nil {
+			return u.HomeDir
+		}
+		return ""
+	}
 )
+
+// gffPATH is where gff is looked for: the install dirs under the user's
+// home, then the system dirs.
+func gffPATH() string {
+	var dirs []string
+	if h := userHome(); h != "" {
+		dirs = append(dirs, filepath.Join(h, "opt", "bin"), filepath.Join(h, ".local", "bin"), filepath.Join(h, "go", "bin"))
+	}
+	dirs = append(dirs, "/usr/local/bin", "/usr/bin", "/bin")
+	return strings.Join(dirs, string(os.PathListSeparator))
+}
+
+// gffEnv is the whole environment gff runs with.
+func gffEnv() []string {
+	env := []string{"PATH=" + gffPATH()}
+	if h := userHome(); h != "" {
+		env = append(env, "HOME="+h)
+	}
+	return env
+}
+
+// cleanLookPath finds an executable on gffPATH, never on $PATH.
+func cleanLookPath(name string) (string, error) {
+	for _, d := range filepath.SplitList(gffPATH()) {
+		p := filepath.Join(d, name)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return p, nil
+		}
+	}
+	return "", errNoGFF
+}
 
 // TokenRequired reports whether gated verbs need an approval token: on when
 // the env override says on, else `gff enabled gss.approval-token.enabled` (exit
@@ -36,5 +101,5 @@ func TokenRequired() bool {
 	if _, err := lookPath("gff"); err != nil {
 		return false
 	}
-	return runGFF("enabled", FlagKey) == nil
+	return runGFF("--source", Source, "enabled", FlagKey) == nil
 }

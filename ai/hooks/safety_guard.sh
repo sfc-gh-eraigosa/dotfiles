@@ -246,12 +246,51 @@ gss_token_required() {
     case "$(printf '%s' "$v" | tr '[:upper:]' '[:lower:]')" in
         on|true|1) return 0 ;;
     esac
-    command -v gff >/dev/null 2>&1 && gff enabled gss.approval-token.enabled >/dev/null 2>&1
+    # Asked from / and against the registered dotfiles source, as gss does: a
+    # broken .github/gff/features.yaml in the cwd repo cannot read as off.
+    command -v gff >/dev/null 2>&1 \
+      && (cd / && gff --source com.github.sfc-gh-eraigosa.dotfiles enabled gss.approval-token.enabled) >/dev/null 2>&1
 }
-if { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
-   || [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
-   || { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+pr([[:space:]]|$) ]] \
-        && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; } && gss_token_required; then
+# The gate also sees gss spelled another way (#472): quotes and backslashes
+# are dropped first ("gss", \gss, g"s"s), and an absolute, ~, $HOME, ./ or ../
+# path to the binary counts ($HOME/opt/bin/gss, ~/gss). Bash runs all of them
+# as gss. The verb may start after ( or a backtick and end at ; | & ) or a
+# backtick, as in { gss push; } or $(gss push).
+# Quotes are dropped, so while the flag is on, quoted text that names a
+# verb (grep "gss push", git log --grep "gss pr") also needs a fresh token.
+# $'...' and $"..." are quotes too: their $ goes with them.
+# A backslash-newline joins two lines into one word, as in bash (g\<nl>ss is
+# gss), except inside a # comment, where the next line runs on its own: a
+# line with a # that starts a word is never joined to the next.
+gss_join() {
+    local out="" line
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [[ "$line" == *\\ ]] && ! [[ "$line" =~ (^|[[:space:]\;\|\&\(\)])# ]]; then
+            out+="${line%\\}"
+        else
+            out+="$line"$'\n'
+        fi
+    done <<< "$1"
+    printf '%s' "$out"
+}
+gss_strip() {
+    local t="${1//\$\'/\'}"; t="${t//\$\"/\"}"
+    printf '%s' "${t//[\"\'\\]/}"
+}
+CMD_JOINED="$(gss_join "$CMD_SCRUBBED")"
+CMD_GSS="$(gss_strip "$CMD_JOINED")"
+GSS_LEAD='(^|[[:space:];&|(`])'
+GSS_BIN='((/|~/|[$]HOME/|[$][{]HOME[}]/|[.][.]?/)([^[:space:];&|`]*/)?)?gss'
+GSS_END='([[:space:];&|)`<>]|$)'
+GSS_VERB_ANY="${GSS_LEAD}${GSS_BIN}${GSS_GLOBAL_FLAGS}[[:space:]]+"
+gss_publish_verb() {
+    local t="$1"
+    [[ "$t" =~ ${GSS_VERB_ANY}(push|pr|sync)${GSS_END} ]] \
+      || [[ "$t" =~ ${GSS_VERB_ANY}feature[[:space:]]+(merged|restack)${GSS_END} ]] \
+      || { [[ "$t" =~ ${GSS_VERB_ANY}feature[[:space:]]+pr${GSS_END} ]] \
+           && [[ "$t" =~ (^|[[:space:]])--ready(=|${GSS_END}) ]]; }
+}
+if gss_publish_verb "$CMD_GSS" && gss_token_required; then
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
         deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."
@@ -270,6 +309,140 @@ if { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
             deny "gss approval token is stale: token holds ${TOKEN_HEAD:-<empty>} but HEAD of ${GSS_EFFECTIVE_DIR} is ${CURRENT_HEAD} (target repo resolved from ${GSS_EFFECTIVE_SRC}). Re-confirm with the user and regenerate it from THAT repo: \`git -C '${GSS_EFFECTIVE_DIR}' rev-parse HEAD > ~/.config/gss/approval.token\`."
         fi
     fi
+fi
+
+# --- 10b. the approval flag is the operator's (#472) ---
+# Like the token, gss.approval-token.enabled is set by the operator, never by
+# an assistant: refuse `gff [flags] set|unset` of the key, and anything but a
+# read of gff's state (~/.config/gff, the overrides; ~/.local/share/gff, the
+# registered snapshots). Reading the flag (gff get/enabled/list) stays free.
+# Each part of the command (split at ; | & ( ) backticks and newlines) is
+# checked on its own:
+# - a part whose command is gff (also behind sudo, env, command, exec, nohup,
+#   nice, timeout, xargs, eval, setsid, stdbuf, doas, ssh, or a shell -c)
+#   may not set or unset the flag, whatever flags come first;
+# - a part that names a gff dir must start with a read-only command, and
+#   nothing may redirect into a gff dir. That is an allowlist, not a list of
+#   writers: rm, mv, sed -i, chmod, unlink, cd-then-edit and anything not
+#   listed are all refused.
+# Quoted text stays one part, so a commit message or PR body that mentions
+# the flag or a path passes. That reading is used only for a short command
+# with no backslash, $'...', $( or backtick, where bash's quoting is plain;
+# any other command is split strictly, quotes and all, as if it were code.
+# It catches mistakes and the plain spellings. It is a text match, so xargs,
+# a variable holding the path, removing a parent dir, or the Write/Edit
+# tools get past it. A message that names a gff path next to a backtick or
+# backslash is refused; pass it through a heredoc (-F - <<EOF), which is
+# never checked as code.
+GFF_DIRS='[.]config/gff|[.]local/share/gff'
+GFF_WRAPPERS='sudo|env|command|exec|eval|nohup|nice|timeout|xargs|setsid|stdbuf|doas|ssh|bash|sh|dash|zsh'
+# Paths are normalized first: a//b, a/./b and a/x/../b name a/b.
+gff_norm() {
+    local t="$1"
+    while [[ "$t" == *//* || "$t" == */./* ]]; do t="${t//\/\//\/}"; t="${t//\/.\//\/}"; done
+    while [[ "$t" =~ ^(.*/)[^/[:space:]]+/[.][.]/(.*)$ ]]; do t="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"; done
+    printf '%s' "$t"
+}
+# The parts of a command ($1, the text; $2, the same text quote-stripped), one per line.
+gff_cmd_parts() {
+    local s="$1" out="" q="" c i
+    if [ "${#s}" -gt 4000 ] || [[ "$s" == *\\* || "$s" == *\$[\'\"\(]* || "$s" == *\`* ]]; then
+        # strict: the quote-stripped command (as rule 10 sees it), split like code
+        s="$(gff_norm "$2")"
+        printf '%s\n' "${s//[;&|()\`]/$'\n'}"
+        return
+    fi
+    for ((i = 0; i < ${#s}; i++)); do
+        c="${s:i:1}"
+        if [ -z "$q" ]; then
+            case "$c" in
+                \"|\') q=$c ;;
+                ';'|'|'|'&'|'('|')') out+=$'\n' ;;
+                '#')
+                    # a comment, as bash reads one: # starting a word runs to
+                    # the end of the line, quotes and all
+                    if [ "$i" -eq 0 ] || [[ "${s:i-1:1}" =~ [[:space:]\;\|\&\(\)] ]]; then
+                        while [ "$i" -lt "${#s}" ] && [ "${s:i:1}" != $'\n' ]; do i=$((i + 1)); done
+                        out+=$'\n'
+                    else
+                        out+=$c
+                    fi ;;
+                *) out+=$c ;;
+            esac
+        elif [ "$c" = "$q" ]; then
+            q=""
+        else
+            case "$c" in
+                ';'|'|'|'&'|'('|')'|'<'|'>'|$'\n') out+=' ' ;;
+                *) out+=$c ;;
+            esac
+        fi
+    done
+    gff_norm "$out"; echo
+}
+gff_guard_text() {
+    local seg w words n prev k sub
+    [[ "$2" == *gff* ]] || return 1
+    while IFS= read -r seg; do
+        read -ra words <<< "$seg"
+        # the part's command word: past VAR=x assignments (one naming a gff
+        # dir is refused: GIT_CONFIG_GLOBAL=<gff path> git config ...),
+        # keywords ({ ! time -p if then do ...) and leading redirections
+        # (2>/dev/null, > /dev/null, </dev/null)
+        n=0; prev=""
+        while [ "$n" -lt "${#words[@]}" ]; do
+            case "${words[n]}" in
+                '{'|'!'|time|if|then|else|elif|do|while|until) ;;
+                -p) [ "$prev" = time ] || break ;;
+                [0-9]*[\<\>]|[\<\>]|[\<\>][\<\>\&]) n=$((n + 1)) ;;
+                [0-9]*[\<\>]*|[\<\>]*) ;;
+                *)
+                    [[ "${words[n]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || break
+                    [[ "${words[n]}" =~ $GFF_DIRS ]] && return 0 ;;
+            esac
+            prev="${words[n]}"; n=$((n + 1))
+        done
+        w="${words[n]:-}"
+        # a gff dir path is never a command, and never the gff reader
+        [[ "$w" =~ $GFF_DIRS ]] && return 0
+        w="${w%%[<>]*}"; w="${w##*/}"
+        # gff [flags] set|unset gss.approval-token...
+        if [ "$w" = gff ] || { [[ "$w" =~ ^($GFF_WRAPPERS)$ ]] && [[ "$seg" =~ (^|[[:space:]/])gff[[:space:]] ]]; }; then
+            [[ "$seg" =~ gff([\<\>][^[:space:]]*)?[[:space:]]+([^[:space:]]+[[:space:]]+)*(set|unset)[[:space:]].*gss[.]approval-token ]] && return 0
+        fi
+        [[ "$seg" =~ $GFF_DIRS ]] || continue
+        [[ "$seg" =~ \>[[:space:]]*[^[:space:]]*($GFF_DIRS) ]] && return 0
+        case "$w" in
+            cat|less|more|head|tail|grep|egrep|fgrep|rg|diff|cmp|jq|ls|stat|wc|file|bat|md5sum|sha256sum|realpath|readlink|test|'['|'[['|echo|printf|gff) ;;
+            # readers that can also write are refused when they would:
+            # git with a write flag taking a gff path (config -f<path>, diff
+            # --output=, archive -o, format-patch --output-directory) or a
+            # subcommand that writes a named file (config, bundle, archive,
+            # format-patch); gh -O/--output/--dir to a gff path, or clone;
+            # tree -o; yq -i at all
+            git)
+                [[ "$seg" =~ [[:space:]](-[A-Za-z]*[fo]|--file|--output|--output-directory)(=|[[:space:]]*)[^[:space:]]*($GFF_DIRS) ]] && return 0
+                k=$((n + 1)); sub=""
+                while [ "$k" -lt "${#words[@]}" ]; do
+                    case "${words[k]}" in
+                        -C|-c) k=$((k + 2)) ;;
+                        -*) k=$((k + 1)) ;;
+                        *) sub="${words[k]}"; break ;;
+                    esac
+                done
+                [[ "$sub" =~ ^(config|bundle|archive|format-patch)$ ]] && return 0 ;;
+            gh)
+                [[ "$seg" =~ [[:space:]](-[A-Za-z]*[OD]|--output|--dir)(=|[[:space:]]*)[^[:space:]]*($GFF_DIRS) ]] && return 0
+                [[ "$seg" =~ [[:space:]]clone[[:space:]] ]] && return 0 ;;
+            tree) [[ "$seg" =~ [[:space:]](-[A-Za-z]*o|--output)(=|[[:space:]]*)[^[:space:]]*($GFF_DIRS) ]] && return 0 ;;
+            yq) [[ "$seg" =~ [[:space:]](-[A-Za-z]*i[A-Za-z]*|--inplace|--in-place)([[:space:]]|=|$) ]] && return 0 ;;
+            *) return 0 ;;
+        esac
+    done < <(gff_cmd_parts "$1" "$2")
+    return 1
+}
+if gff_guard_text "$CMD_JOINED" "$CMD_GSS"; then
+    deny "gss.approval-token.enabled is the operator's switch, like the approval token: an assistant never sets, unsets or edits it, nor changes ~/.config/gff. Reading is fine (cat, grep, diff, jq, ls; save a copy with \`cat ~/.config/gff/config.yaml > /tmp/x\`). To change the flag, ask the operator to run it themselves (\`! gff set gss.approval-token.enabled <true|false>\`)."
 fi
 
 # --- 11. gss feature checkpoint outside a worker worktree ---

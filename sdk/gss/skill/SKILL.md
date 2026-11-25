@@ -48,9 +48,16 @@ This skill provides a structured and safe workflow for managing Git repositories
 > the gated verbs below run directly: no token, no handshake. Everything else
 > stays: reviews, CI, the privacy hooks and the hooksPath check. The rest of
 > this section applies when the flag is on.
-> Turning it on from outside the dotfiles checkout needs the new key in gff's
-> registered snapshot: run `./install.sh` (it re-runs `gff install`) after
-> pulling, then `gff set gss.approval-token.enabled true`.
+> The flag is the operator's, like the token: an assistant never sets, unsets
+> or edits it, and only reads `~/.config/gff` (the safety_guard hook refuses
+> anything else). gss and the hook ask gff about the registered dotfiles source
+> (`--source com.github.sfc-gh-eraigosa.dotfiles`) from outside any repo, gss with
+> only HOME (from the password database) and a fixed PATH, so a command's own
+> PATH, HOME or XDG settings, or a broken flag file in the repo it runs in,
+> cannot make gff fail and read as off.
+> Turning it on needs the key in gff's registered dotfiles snapshot: run
+> `./install.sh` (it re-runs `gff install`) after pulling, then
+> `gff set gss.approval-token.enabled true`.
 
 The approval token is the **human's** signature on one exact commit. gss
 checks it against `HEAD` and consumes it. **An assistant never writes
