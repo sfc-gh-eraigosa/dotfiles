@@ -35,7 +35,10 @@ func TestHooksArgv(t *testing.T) {
 		t.Fatalf("unknown format: exit %d, want 2", code)
 	}
 	argvFormat = "lines"
-	if _, code := runArgv(t, strings.Repeat("x", maxArgvInput+1)); code != 2 {
-		t.Fatalf("over the limit: exit %d, want 2", code)
+	if _, code := runArgv(t, strings.Repeat("x", maxArgvInput+1)); code != 3 {
+		t.Fatalf("over the limit: exit %d, want 3", code)
+	}
+	if _, code := runArgv(t, strings.Repeat(": x;", 20000)); code != 3 {
+		t.Fatalf("past the work budget: exit %d, want 3", code)
 	}
 }

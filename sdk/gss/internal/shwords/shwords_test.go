@@ -145,6 +145,12 @@ func TestLines(t *testing.T) {
 		{"env -S echo | bash", "env -S 'echo gss' push | bash", []string{"gss push", "env -S echo_gss push", "echo gss push", "bash"}},
 		{"cat -u heredoc | bash", "cat -u <<E | bash\ngss push\nE\n", []string{"gss push", "cat -u <<E", "bash"}},
 		{"cat -- heredoc | bash", "cat -- <<E | bash\ngss push\nE\n", []string{"gss push", "cat -- <<E", "bash"}},
+		// agy review of #475 (a8f60ff7)
+		{"echo - prints the dash", "echo '-' 'gss push' | bash", []string{"- gss push", "echo - gss_push", "bash"}},
+		{"cat -s | bash", "echo 'gss push' | cat -s | bash", []string{"gss push", "echo gss_push", "cat -s", "bash"}},
+		{"cat 2>/dev/null | bash", "echo 'gss push' | cat 2>/dev/null | bash", []string{"gss push", "echo gss_push", "cat 2>/dev/null", "bash"}},
+		{"cat >f | bash is not passed on", "echo 'gss push' | cat >f | bash", []string{"echo gss_push", "cat >f", "bash"}},
+		{"env -S -ux keeps NAME=", "env -S '-ux G=c git x'", []string{"env -S -ux_G=c_git_x", "G=c git x"}},
 		{"bash -s reads stdin", "bash -s x <<'IN'\ngss push\nIN\n", []string{"bash -s x <<IN", "gss push"}},
 		{"message text is one word", `git commit -m "gss push; gff set x"`, []string{"git commit -m gss_push_gff_set_x"}},
 	}
@@ -356,5 +362,38 @@ func TestPercentBOctal(t *testing.T) {
 	}
 	if got := printfText(`%b`, []string{`\147ss push`}); got != "gss push" {
 		t.Errorf(`printf %%b \147ss push = %q`, got)
+	}
+}
+
+// agy review of #475 (a8f60ff7): printf width, format quote escapes, a
+// format that prints nothing, echo's options, cat flags and stderr, -ux.
+func TestPrintfWidthAndBounds(t *testing.T) {
+	cases := []struct {
+		format string
+		args   []string
+		want   string
+	}{
+		{`%s%1s%s`, []string{"gss", "", "push"}, "gss push"},
+		{`%s%*s%s`, []string{"gss", "1", "", "push"}, "gss push"},
+		{`%-3s|%*s|`, []string{"c", "2", "d"}, "c  | d|"},
+		{`%*s|`, []string{"-3", "e"}, "e  |"},
+		{`\"q\" \'s\' \?`, nil, `"q" 's' ?`},
+	}
+	for _, c := range cases {
+		if got := printfText(c.format, c.args); got != c.want {
+			t.Errorf("printfText(%q, %q) = %q, want %q", c.format, c.args, got, c.want)
+		}
+	}
+	if got := percentBEscapes(`\"a\"`); got != `\"a\"` {
+		t.Errorf(`%%b keeps \" = %q`, got)
+	}
+	format := strings.Repeat("-", 400000) + ".0s"
+	start := time.Now()
+	printfText("%"+format, slices.Repeat([]string{""}, 100000))
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("a repeating format that prints nothing took %v", d)
+	}
+	if !takesValue("-u") || takesValue("-ux") || !takesValue("--argv0") {
+		t.Error("takesValue: -u and --argv0 take the next word, -ux does not")
 	}
 }

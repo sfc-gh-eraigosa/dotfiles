@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -534,7 +535,7 @@ func pipedScript(b *syntax.BinaryCmd) []string {
 	args := ws[1:]
 	switch path.Base(ws[0]) {
 	case "echo":
-		for len(args) > 0 && strings.HasPrefix(args[0], "-") {
+		for len(args) > 0 && echoOption.MatchString(args[0]) {
 			args = args[1:]
 		}
 		// as printed, and with echo -e's escapes decoded
@@ -599,6 +600,8 @@ func printEscapes(s string, mode int) string {
 		switch {
 		case c == '\\':
 			b.WriteByte('\\')
+		case format && (c == '"' || c == '\'' || c == '?'):
+			b.WriteByte(c) // printf's format, not echo -e or %b
 		case c == 'c' && !format:
 			return b.String()
 		case c >= '0' && c <= '7' && (mode != escEcho || c == '0'):
@@ -640,18 +643,33 @@ func printEscapes(s string, mode int) string {
 }
 
 // maxPrinted bounds what printfText produces: the hook's input is at most
-// 1 MiB, and a format that repeats must not grow past that.
-const maxPrinted = 1 << 20
+// 1 MiB, and a format that repeats must not grow past that. maxScanned
+// bounds the format bytes it reads, so a format that prints nothing (%.0s)
+// cannot repeat a large format many times either.
+const (
+	maxPrinted = 1 << 20
+	maxScanned = 16 << 20
+)
 
 // printfText is what printf FORMAT ARGS... prints, for the conversions a
 // script could hide in: the text between conversions with bash's printf
-// escapes (\xHH, \uHHHH, \NNN, as $'...'), %s and %b (with echo -e escapes)
-// taking the next argument cut to any precision (%.3s), %% as %, any other
-// conversion taking an argument as is, and the format repeating while
-// arguments are left, as bash's printf does. The output stops at maxPrinted.
+// escapes (\xHH, \uHHHH, \NNN, \", as $'...'), each conversion taking the
+// next argument (%b with its escapes, %c its first byte), padded to its
+// width (%5s, %-5s, %*s) and cut to its precision (%.3s, %.*s), %% as %,
+// and the format repeating while arguments are left, as bash's printf does.
 func printfText(format string, args []string) string {
 	var b strings.Builder
+	next := func() (string, bool) {
+		if len(args) == 0 {
+			return "", false
+		}
+		a := args[0]
+		args = args[1:]
+		return a, true
+	}
+	scanned := 0
 	for pass := 0; pass == 0 || len(args) > 0; pass++ {
+		scanned += len(format)
 		used := false
 		lit := 0
 		for i := 0; i < len(format) && b.Len() < maxPrinted; i++ {
@@ -660,21 +678,32 @@ func printfText(format string, args []string) string {
 			}
 			b.WriteString(formatEscapes(format[lit:i]))
 			j := i + 1
-			for j < len(format) && strings.IndexByte("-+ #0123456789*", format[j]) >= 0 {
-				if format[j] == '*' && len(args) > 0 {
-					args, used = args[1:], true // the width is an argument
-				}
+			left, width, prec := false, 0, -1
+			for j < len(format) && strings.IndexByte("-+ #0", format[j]) >= 0 {
+				left = left || format[j] == '-'
 				j++
 			}
-			prec := -1
+			if j < len(format) && format[j] == '*' {
+				a, ok := next()
+				used = used || ok
+				width, _ = strconv.Atoi(a)
+				j++
+			} else {
+				k := j
+				for j < len(format) && format[j] >= '0' && format[j] <= '9' {
+					j++
+				}
+				width, _ = strconv.Atoi(format[k:j])
+			}
+			if width < 0 {
+				left, width = true, -width
+			}
 			if j < len(format) && format[j] == '.' {
 				j++
 				if j < len(format) && format[j] == '*' {
-					prec = 0
-					if len(args) > 0 {
-						prec, _ = strconv.Atoi(args[0])
-						args, used = args[1:], true
-					}
+					a, ok := next()
+					used = used || ok
+					prec, _ = strconv.Atoi(a)
 					j++
 				} else {
 					k := j
@@ -693,25 +722,32 @@ func printfText(format string, args []string) string {
 				b.WriteByte('%')
 				continue
 			}
-			arg := ""
-			if len(args) > 0 {
-				arg, args, used = args[0], args[1:], true
-			}
-			if format[j] == 'b' {
+			arg, ok := next()
+			used = used || ok
+			switch format[j] {
+			case 'b':
 				arg = percentBEscapes(arg)
-			}
-			if format[j] == 'c' && len(arg) > 1 {
-				arg = arg[:1]
+			case 'c':
+				if len(arg) > 1 {
+					arg = arg[:1]
+				}
 			}
 			if prec >= 0 && prec < len(arg) && (format[j] == 's' || format[j] == 'b') {
 				arg = arg[:prec]
 			}
+			pad := min(width-len(arg), maxPrinted-b.Len())
+			if pad > 0 && !left {
+				b.WriteString(strings.Repeat(" ", pad))
+			}
 			b.WriteString(arg)
+			if pad > 0 && left {
+				b.WriteString(strings.Repeat(" ", pad))
+			}
 		}
 		if lit < len(format) && b.Len() < maxPrinted {
 			b.WriteString(formatEscapes(format[lit:]))
 		}
-		if !used || b.Len() >= maxPrinted {
+		if !used || b.Len() >= maxPrinted || scanned >= maxScanned {
 			break
 		}
 	}
@@ -1031,16 +1067,21 @@ func takesValue(w string) bool {
 	if !strings.HasPrefix(w, "-") || len(w) < 2 {
 		return false
 	}
-	letter, v, _ := shortValue(w, wr.short, []string{"x"})
-	return letter != 0 && v == "x"
+	letter, _, took := shortValue(w, wr.short, []string{"x"})
+	return letter != 0 && took
 }
 
 // passesStdin reports whether a pipeline stage copies its stdin to its
 // stdout: cat with no file (or -), tee, with no redirection of its own.
 func passesStdin(st *syntax.Stmt) bool {
 	call, ok := st.Cmd.(*syntax.CallExpr)
-	if !ok || len(st.Redirs) > 0 {
+	if !ok {
 		return false
+	}
+	for _, r := range st.Redirs {
+		if r.N == nil || r.N.Value == "0" || r.N.Value == "1" {
+			return false // its stdin or stdout goes elsewhere (2>/dev/null is fine)
+		}
 	}
 	ws := commandWords(callWords(call))
 	if ws == nil {
@@ -1072,9 +1113,11 @@ func commandWords(ws []string) []string {
 }
 
 // catReadsStdin reports whether cat's arguments leave it reading stdin:
-// none, -, -u (ignored by GNU cat), and -- before -.
+// none or -, after any flags and --.
 func catReadsStdin(args []string) bool {
-	for len(args) > 0 && args[0] == "-u" {
+	// flags only change how the text looks (-s, -v, -E): it still reaches
+	// the shell
+	for len(args) > 0 && len(args[0]) > 1 && args[0][0] == '-' && args[0] != "--" {
 		args = args[1:]
 	}
 	if len(args) > 0 && args[0] == "--" {
@@ -1082,3 +1125,7 @@ func catReadsStdin(args []string) bool {
 	}
 	return len(args) == 0 || (len(args) == 1 && args[0] == "-")
 }
+
+// echoOption is an argument bash's echo takes as options (-n, -e, -E, or a
+// cluster of them); any other argument, - and -- included, is printed.
+var echoOption = regexp.MustCompile(`^-[neE]+$`)

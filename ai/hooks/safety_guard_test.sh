@@ -678,7 +678,18 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | env -S bash" 'parsed: env -S bash reads the pipe'
     assert_exit 2 Bash $'cat -u <<\'E\' | bash\ngff set gss.approval-token.enabled false\nE' 'parsed: cat -u passes the heredoc'
     # review of #475 (a8f60ff7)
-    assert_exit 2 Bash "printf '%b' '\\147ff set gss.approval-token.enabled false' | bash" 'parsed: printf %b reads \\147 as octal' )
+    assert_exit 2 Bash "printf '%b' '\\147ff set gss.approval-token.enabled false' | bash" 'parsed: printf %b reads \\147 as octal'
+    # agy review of #475 (a8f60ff7)
+    assert_exit 2 Bash "echo \$'-\\n\\x67ff set gss.approval-token.enabled false' | bash" 'parsed: echo prints a - argument'
+    assert_exit 2 Bash "printf '%s%1s%s\\n' \$'\\x67ff' '' 'set gss.approval-token.enabled false' | bash" 'parsed: printf pads to its width'
+    assert_exit 2 Bash "printf '\\\"\\x67ff\\\" set gss.approval-token.enabled false\\n' | bash" 'parsed: printf decodes \" in its format'
+    assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | cat 2>/dev/null | bash" 'parsed: cat 2>/dev/null passes the text on'
+    assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | cat -s | bash" 'parsed: cat -s passes the text on'
+    # agy review of #475 (a8f60ff7): padding that runs out argv's work
+    # budget is refused, not judged by the lines before it
+    pad="printf %s$(printf " ''%.0s" $(seq 30000))"
+    assert_exit 2 Bash "$pad | bash; \$'\\x67ff' set gss.approval-token.enabled false" 'parsed: padding past the work budget is refused'
+    assert_exit 2 Bash "$pad; echo hi" 'parsed: any command past the work budget is refused' )
   # a gss too old for --format: argv exits 1, the text check stands alone and
   # whatever it printed is dropped
   OLD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-oldgss.XXXXXX")"

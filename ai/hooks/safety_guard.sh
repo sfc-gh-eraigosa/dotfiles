@@ -297,7 +297,8 @@ gss_publish_verb() {
 # shell parsed again. Rules 10 and 10b check these lines as well as the text,
 # so the parse only adds refusals. On a syntax error argv exits 2 after the
 # lines of the statements before it, which bash would run, and those are
-# kept, as are the lines before argv's work budget ran out (exit 2 too).
+# kept. A command too large to read through (over 1 MiB or past argv's work
+# budget, exit 3) is refused: padding must not hide a later line.
 # With no gss on PATH, a gss too old to know argv (it rejects --format,
 # exit 1), or an argv that runs past 5 s (timeout, exit 124: the hook must
 # finish well inside its own timeout, or the command runs unchecked),
@@ -310,7 +311,13 @@ if command -v gss > /dev/null 2>&1; then
     else
         CMD_PARSED="$(printf '%s' "$CMD" | gss hooks argv --format=lines 2> /dev/null)" || argv_rc=$?
     fi
-    case $argv_rc in 0 | 2) ;; *) CMD_PARSED="" ;; esac
+    case $argv_rc in
+        0 | 2) ;;
+        # too large to read through: judging only part of it would let
+        # padding hide a later line
+        3) deny "command too large for the safety check to read; split it into smaller commands (#474)" ;;
+        *) CMD_PARSED="" ;;
+    esac
 fi
 gss_publish_parsed() {
     local l

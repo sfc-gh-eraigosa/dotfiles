@@ -10,7 +10,7 @@ import (
 )
 
 // maxArgvInput is the most stdin hooks argv reads; a longer command is not
-// parsed (exit 2), and the hook keeps its text match.
+// parsed (exit 3), and the hook refuses it.
 const maxArgvInput = 1 << 20
 
 // argvFormat is the output format; "lines" is the only one. The hook passes
@@ -30,8 +30,10 @@ stays a $ marker; the commands inside a substitution get lines of their own.
 
 The safety_guard hook runs its gss and gff checks on these lines as well as on
 the command's text, so a spelling the text match cannot follow is still
-seen (#474). Exit 2 when the command does not parse or is over 1 MiB: the
-hook then keeps its text match alone.
+seen (#474). Exit 2 when the command does not parse, after the lines of the
+statements before the error (bash runs those). Exit 3 when the command is too
+large to read through (over 1 MiB, or past the work budget): the hook refuses
+it rather than judge part of it.
 
 --format=lines (the default, and the only format) is what the hook passes:
 a gss without argv rejects the flag instead of printing help.`,
@@ -43,12 +45,15 @@ a gss without argv rejects the flag instead of printing help.`,
 		}
 		src, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxArgvInput+1))
 		if err == nil && len(src) > maxArgvInput {
-			err = errors.New("hooks argv: command over 1 MiB")
+			err = shwords.ErrTooBig // over 1 MiB
 		}
 		if err == nil {
 			err = shwords.Print(cmd.OutOrStdout(), string(src))
 		}
-		if err != nil {
+		switch {
+		case errors.Is(err, shwords.ErrTooBig):
+			hooksExit(3)
+		case err != nil:
 			hooksExit(2)
 		}
 		return nil
