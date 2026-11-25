@@ -689,7 +689,15 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     # budget is refused, not judged by the lines before it
     pad="printf %s$(printf " ''%.0s" $(seq 30000))"
     assert_exit 2 Bash "$pad | bash; \$'\\x67ff' set gss.approval-token.enabled false" 'parsed: padding past the work budget is refused'
-    assert_exit 2 Bash "$pad; echo hi" 'parsed: any command past the work budget is refused' )
+    assert_exit 2 Bash "$pad; echo hi" 'parsed: any command past the work budget is refused'
+    # agy review of #475 (3f44d4f7)
+    assert_exit 2 Bash "printf '%1048576s%b\\n' '' '\\147ff set gss.approval-token.enabled false' | bash" 'parsed: printf past its cap is refused'
+    assert_exit 2 Bash "printf '%b%s' 'rm ~/.config/\\147ff/config.yaml\\c' '/../../../tmp/x' | bash" 'parsed: \c in %b ends printf'
+    assert_exit 2 Bash "tee /dev/null <<< \$'\\x67ff set gss.approval-token.enabled false' | bash" 'parsed: tee passes its here-string'
+    assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | cat /dev/stdin | bash" 'parsed: cat /dev/stdin passes the text'
+    assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | { bash; }" 'parsed: a group running bash reads the pipe'
+    assert_exit 2 Bash $'bash /proc/thread-self/fd/0 <<\'E\'\n$\'\\x67ff\' set gss.approval-token.enabled false\nE' 'parsed: /proc/thread-self/fd/0 is stdin'
+    assert_exit 2 Bash "sudo -R / bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: sudo -R takes a value' )
   # a gss too old for --format: argv exits 1, the text check stands alone and
   # whatever it printed is dropped
   OLD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-oldgss.XXXXXX")"

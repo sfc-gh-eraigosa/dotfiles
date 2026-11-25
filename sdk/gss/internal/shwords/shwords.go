@@ -12,6 +12,7 @@
 package shwords
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -45,7 +46,7 @@ var ErrTooBig = errors.New("command too large to parse")
 type walk struct {
 	out   []string
 	steps int
-	seen  map[string]int // script and stdin -> shallowest depth parsed: one heredoc read by 60 shells is parsed once
+	seen  map[string]int // hash of script and stdin -> shallowest depth parsed: one heredoc read by 60 shells is parsed once
 }
 
 // script parses a nested script once; bash runs the statements before a
@@ -56,7 +57,24 @@ func (w *walk) script(src string, depth int, stdin []*syntax.Redirect) {
 	}
 	// the same text with another stdin is another script, and one first
 	// seen deeper has had less depth left to follow its own nesting
-	key := src + "\x00" + strings.Join(stdinScripts(stdin), "\x00")
+	in := stdinScripts(stdin)
+	// the bytes read count against the work budget, so many statements
+	// sharing a large heredoc cannot spend seconds or gigabytes
+	n := len(src)
+	for _, s := range in {
+		n += len(s)
+	}
+	w.steps += n / bytesPerStep
+	if w.steps > maxSteps {
+		return
+	}
+	h := sha256.New()
+	h.Write([]byte(src))
+	for _, s := range in {
+		h.Write([]byte{0})
+		h.Write([]byte(s))
+	}
+	key := string(h.Sum(nil))
 	if d, ok := w.seen[key]; ok && d <= depth {
 		return
 	}
@@ -110,7 +128,12 @@ func (w *walk) visit(n syntax.Node, depth int, stdin []*syntax.Redirect) {
 			return false
 		}
 		if b, ok := m.(*syntax.BinaryCmd); ok && depth < maxDepth {
-			for _, inner := range pipedScript(b) {
+			inners, ok := pipedScript(b)
+			if !ok {
+				w.steps = maxSteps + 1 // too large to follow: Lines reports ErrTooBig
+				return false
+			}
+			for _, inner := range inners {
 				w.script(inner, depth+1, nil)
 			}
 		}
@@ -213,7 +236,7 @@ var wrappers = map[string]wrapper{
 	"env":     {"uSCPa", []string{"--unset", "--chdir", "--split-string", "--argv0"}},
 	"command": {}, "builtin": {}, "nohup": {}, "setsid": {},
 	"exec":    {"a", nil},
-	"sudo":    {"ugpChDrtUT", []string{"--user", "--group", "--host", "--prompt", "--chdir", "--close-from", "--role", "--type", "--command-timeout", "--other-user"}},
+	"sudo":    {"ugpChDrtUTR", []string{"--chroot", "--user", "--group", "--host", "--prompt", "--chdir", "--close-from", "--role", "--type", "--command-timeout", "--other-user"}},
 	"doas":    {"uC", nil},
 	"time":    {"fo", []string{"--format", "--output"}},
 	"nice":    {"n", []string{"--adjustment"}},
@@ -447,10 +470,10 @@ func envSplit(s string) []string {
 // isStdin reports whether a script file operand is the shell's own stdin.
 func isStdin(p string) bool {
 	switch path.Clean(p) {
-	case "/dev/stdin", "/dev/fd/0", "/proc/self/fd/0":
+	case "/dev/stdin", "/dev/fd/0":
 		return true
 	}
-	return false
+	return procStdin.MatchString(path.Clean(p))
 }
 
 // shellScripts is what a shell runs from its arguments and redirections:
@@ -500,13 +523,13 @@ options:
 // pipedScript is the text a pipeline pipes into a shell that reads its
 // script from stdin (echo '...' | bash, printf ... | sh, cat <<E | bash):
 // the arguments of echo or printf, or cat's heredoc or here-string.
-func pipedScript(b *syntax.BinaryCmd) []string {
+// ok is false when the text is too large to follow (printf past maxPrinted).
+func pipedScript(b *syntax.BinaryCmd) ([]string, bool) {
 	if b.Op != syntax.Pipe && b.Op != syntax.PipeAll {
-		return nil
+		return nil, true
 	}
-	right, ok := b.Y.Cmd.(*syntax.CallExpr)
-	if !ok || !readsScriptFromStdin(callWords(right)) {
-		return nil
+	if !consumerReadsScript(b.Y, 0) {
+		return nil, true
 	}
 	// a | b | bash parses as (a | b) | bash: the producer is the last stage,
 	// or the one before a stage that passes its stdin on (cat, tee)
@@ -526,11 +549,11 @@ func pipedScript(b *syntax.BinaryCmd) []string {
 	}
 	left, ok := x.Cmd.(*syntax.CallExpr)
 	if !ok {
-		return nil
+		return nil, true
 	}
 	ws := commandWords(callWords(left))
 	if ws == nil {
-		return nil
+		return nil, true
 	}
 	args := ws[1:]
 	switch path.Base(ws[0]) {
@@ -540,40 +563,45 @@ func pipedScript(b *syntax.BinaryCmd) []string {
 		}
 		// as printed, and with echo -e's escapes decoded
 		text := strings.Join(args, " ")
-		return []string{text, echoEscapes(text)}
+		return []string{text, echoEscapes(text)}, true
 	case "printf":
 		if len(args) > 0 && args[0] == "--" {
 			args = args[1:]
 		}
 		if len(args) == 0 {
-			return nil
+			return nil, true
 		}
-		return []string{printfText(args[0], args[1:])}
+		text, ok := printfText(args[0], args[1:])
+		return []string{text}, ok
 	case "cat":
 		if catReadsStdin(args) {
-			return stdinScripts(x.Redirs)
+			return stdinScripts(x.Redirs), true
 		}
+	case "tee":
+		return stdinScripts(x.Redirs), true
 	}
-	return nil
+	return nil, true
 }
 
 // echoEscapes decodes echo -e's (and printf %b's) escapes: \\, \n and the
 // other letters, \0NNN octal, \xHH, \uHHHH, \UHHHHHHHH; a NUL is printed and
 // the text goes on, and \c ends all output.
 func echoEscapes(s string) string {
-	return printEscapes(s, escEcho)
+	out, _ := printEscapes(s, escEcho)
+	return out
 }
 
 // percentBEscapes decodes printf %b's argument: as echo -e, but an octal
 // escape is also \NNN without the 0 (bash: %b of \147 is g).
-func percentBEscapes(s string) string {
+func percentBEscapes(s string) (string, bool) {
 	return printEscapes(s, escPercentB)
 }
 
 // formatEscapes decodes the text of a printf format between conversions:
 // as echo -e, but an octal escape is \NNN and \c is not special.
 func formatEscapes(s string) string {
-	return printEscapes(s, escFormat)
+	out, _ := printEscapes(s, escFormat)
+	return out
 }
 
 // The three escape dialects of echo -e, printf %b and a printf format.
@@ -583,7 +611,8 @@ const (
 	escFormat
 )
 
-func printEscapes(s string, mode int) string {
+// printEscapes also reports whether a \c ended the output.
+func printEscapes(s string, mode int) (string, bool) {
 	format := mode == escFormat
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
@@ -603,7 +632,7 @@ func printEscapes(s string, mode int) string {
 		case format && (c == '"' || c == '\'' || c == '?'):
 			b.WriteByte(c) // printf's format, not echo -e or %b
 		case c == 'c' && !format:
-			return b.String()
+			return b.String(), true
 		case c >= '0' && c <= '7' && (mode != escEcho || c == '0'):
 			j := i
 			if c == '0' && mode != escFormat {
@@ -639,7 +668,7 @@ func printEscapes(s string, mode int) string {
 			b.WriteByte(c)
 		}
 	}
-	return b.String()
+	return b.String(), false
 }
 
 // maxPrinted bounds what printfText produces: the hook's input is at most
@@ -657,8 +686,9 @@ const (
 // next argument (%b with its escapes, %c its first byte), padded to its
 // width (%5s, %-5s, %*s) and cut to its precision (%.3s, %.*s), %% as %,
 // and the format repeating while arguments are left, as bash's printf does.
-func printfText(format string, args []string) string {
+func printfText(format string, args []string) (string, bool) {
 	var b strings.Builder
+	stopped := false
 	next := func() (string, bool) {
 		if len(args) == 0 {
 			return "", false
@@ -726,7 +756,7 @@ func printfText(format string, args []string) string {
 			used = used || ok
 			switch format[j] {
 			case 'b':
-				arg = percentBEscapes(arg)
+				arg, stopped = percentBEscapes(arg)
 			case 'c':
 				if len(arg) > 1 {
 					arg = arg[:1]
@@ -743,19 +773,24 @@ func printfText(format string, args []string) string {
 			if pad > 0 && left {
 				b.WriteString(strings.Repeat(" ", pad))
 			}
+			if stopped {
+				break // \c in %b: printf prints nothing more
+			}
 		}
-		if lit < len(format) && b.Len() < maxPrinted {
+		if lit < len(format) && b.Len() < maxPrinted && !stopped {
 			b.WriteString(formatEscapes(format[lit:]))
 		}
-		if !used || b.Len() >= maxPrinted || scanned >= maxScanned {
+		if stopped || !used {
 			break
 		}
+		if b.Len() >= maxPrinted || scanned >= maxScanned {
+			return "", false // too large to follow: the caller refuses
+		}
 	}
-	out := b.String()
-	if len(out) > maxPrinted {
-		out = out[:maxPrinted]
+	if b.Len() >= maxPrinted {
+		return "", false
 	}
-	return out
+	return b.String(), true
 }
 
 // readsScriptFromStdin reports whether a command (past its wrappers) is a
@@ -1113,19 +1148,57 @@ func commandWords(ws []string) []string {
 }
 
 // catReadsStdin reports whether cat's arguments leave it reading stdin:
-// none or -, after any flags and --.
+// none, or any operand that is stdin.
 func catReadsStdin(args []string) bool {
 	// flags only change how the text looks (-s, -v, -E): it still reaches
-	// the shell
-	for len(args) > 0 && len(args[0]) > 1 && args[0][0] == '-' && args[0] != "--" {
-		args = args[1:]
+	// the shell; with operands, any one that is stdin (- or /dev/stdin)
+	// puts the piped text in the output
+	files, dashdash := 0, false
+	for _, a := range args {
+		switch {
+		case !dashdash && a == "--":
+			dashdash = true
+		case !dashdash && len(a) > 1 && a[0] == '-':
+		case a == "-" || isStdin(a):
+			return true
+		default:
+			files++
+		}
 	}
-	if len(args) > 0 && args[0] == "--" {
-		args = args[1:]
-	}
-	return len(args) == 0 || (len(args) == 1 && args[0] == "-")
+	return files == 0
 }
 
 // echoOption is an argument bash's echo takes as options (-n, -e, -E, or a
 // cluster of them); any other argument, - and -- included, is printed.
 var echoOption = regexp.MustCompile(`^-[neE]+$`)
+
+// bytesPerStep is how many bytes of a nested script or its stdin cost one
+// step of the work budget.
+const bytesPerStep = 64
+
+// procStdin is stdin under /proc: self, thread-self, a pid, or a task.
+var procStdin = regexp.MustCompile(`^/proc/[^/]+(/task/[^/]+)?/fd/0$`)
+
+// consumerReadsScript reports whether the stage a pipe feeds is a shell that
+// reads its script from stdin, directly or as a statement of a group or
+// subshell it feeds ((bash), { bash; }).
+func consumerReadsScript(st *syntax.Stmt, depth int) bool {
+	if st == nil || depth > maxDepth {
+		return false
+	}
+	var stmts []*syntax.Stmt
+	switch c := st.Cmd.(type) {
+	case *syntax.CallExpr:
+		return readsScriptFromStdin(callWords(c))
+	case *syntax.Block:
+		stmts = c.Stmts
+	case *syntax.Subshell:
+		stmts = c.Stmts
+	}
+	for _, s := range stmts {
+		if len(stdinRedirs(s.Redirs)) == 0 && consumerReadsScript(s, depth+1) {
+			return true
+		}
+	}
+	return false
+}

@@ -2,6 +2,7 @@ package shwords
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -151,6 +152,14 @@ func TestLines(t *testing.T) {
 		{"cat 2>/dev/null | bash", "echo 'gss push' | cat 2>/dev/null | bash", []string{"gss push", "echo gss_push", "cat 2>/dev/null", "bash"}},
 		{"cat >f | bash is not passed on", "echo 'gss push' | cat >f | bash", []string{"echo gss_push", "cat >f", "bash"}},
 		{"env -S -ux keeps NAME=", "env -S '-ux G=c git x'", []string{"env -S -ux_G=c_git_x", "G=c git x"}},
+		// agy review of #475 (3f44d4f7)
+		{"tee <<< | bash", "tee /dev/null <<< 'gss push' | bash", []string{"gss push", "tee /dev/null <<<gss_push", "bash"}},
+		{"echo | cat /dev/stdin | bash", "echo 'gss push' | cat /dev/stdin | bash", []string{"gss push", "echo gss_push", "cat /dev/stdin", "bash"}},
+		{"echo | cat - f | bash", "echo 'gss push' | cat - f | bash", []string{"gss push", "echo gss_push", "cat - f", "bash"}},
+		{"echo | (bash)", "echo 'gss push' | (bash)", []string{"gss push", "echo gss_push", "bash"}},
+		{"echo | { bash; }", "echo 'gss push' | { bash; }", []string{"gss push", "echo gss_push", "bash"}},
+		{"bash /proc/thread-self/fd/0", "bash /proc/thread-self/fd/0 <<<'gss push'", []string{"bash /proc/thread-self/fd/0 <<<gss_push", "gss push"}},
+		{"sudo -R / bash -c", "sudo -R / bash -c 'gss push'", []string{"sudo -R / bash -c gss_push", "gss push"}},
 		{"bash -s reads stdin", "bash -s x <<'IN'\ngss push\nIN\n", []string{"bash -s x <<IN", "gss push"}},
 		{"message text is one word", `git commit -m "gss push; gff set x"`, []string{"git commit -m gss_push_gff_set_x"}},
 	}
@@ -298,15 +307,15 @@ func TestPrintfText(t *testing.T) {
 		{`100%% %s`, []string{"x"}, "100% x"},
 	}
 	for _, c := range cases {
-		if got := printfText(c.format, c.args); got != c.want {
+		if got, _ := printfText(c.format, c.args); got != c.want {
 			t.Errorf("printfText(%q, %q) = %q, want %q", c.format, c.args, got, c.want)
 		}
 	}
 	big := strings.Repeat("a", 500<<10) + "%s"
 	args := slices.Repeat([]string{"x"}, 1000)
 	start := time.Now()
-	if got := printfText(big, args); len(got) > maxPrinted {
-		t.Errorf("printfText grew to %d bytes, want at most %d", len(got), maxPrinted)
+	if got, ok := printfText(big, args); ok || got != "" {
+		t.Errorf("printfText past maxPrinted: ok %v, %d bytes; want it reported too large", ok, len(got))
 	}
 	if d := time.Since(start); d > time.Second {
 		t.Errorf("printfText took %v on a repeating 500 KB format", d)
@@ -339,7 +348,7 @@ func TestPrintEscapes(t *testing.T) {
 		{`a\cb`, nil, `a\cb`},
 	}
 	for _, c := range printf {
-		if got := printfText(c.format, c.args); got != c.want {
+		if got, _ := printfText(c.format, c.args); got != c.want {
 			t.Errorf("printfText(%q, %q) = %q, want %q", c.format, c.args, got, c.want)
 		}
 	}
@@ -353,14 +362,14 @@ func TestPrintEscapes(t *testing.T) {
 // prints g|g|g7|, echo -e '\147' prints \147).
 func TestPercentBOctal(t *testing.T) {
 	for in, want := range map[string]string{`\147`: "g", `\0147`: "g", `\1477`: "g7", `\01477`: "g7"} {
-		if got := percentBEscapes(in); got != want {
+		if got, _ := percentBEscapes(in); got != want {
 			t.Errorf("percentBEscapes(%q) = %q, want %q", in, got, want)
 		}
 	}
 	if got := echoEscapes(`\147`); got != `\147` {
 		t.Errorf(`echoEscapes(\147) = %q, want it literal`, got)
 	}
-	if got := printfText(`%b`, []string{`\147ss push`}); got != "gss push" {
+	if got, _ := printfText(`%b`, []string{`\147ss push`}); got != "gss push" {
 		t.Errorf(`printf %%b \147ss push = %q`, got)
 	}
 }
@@ -380,11 +389,11 @@ func TestPrintfWidthAndBounds(t *testing.T) {
 		{`\"q\" \'s\' \?`, nil, `"q" 's' ?`},
 	}
 	for _, c := range cases {
-		if got := printfText(c.format, c.args); got != c.want {
+		if got, _ := printfText(c.format, c.args); got != c.want {
 			t.Errorf("printfText(%q, %q) = %q, want %q", c.format, c.args, got, c.want)
 		}
 	}
-	if got := percentBEscapes(`\"a\"`); got != `\"a\"` {
+	if got, _ := percentBEscapes(`\"a\"`); got != `\"a\"` {
 		t.Errorf(`%%b keeps \" = %q`, got)
 	}
 	format := strings.Repeat("-", 400000) + ".0s"
@@ -395,5 +404,39 @@ func TestPrintfWidthAndBounds(t *testing.T) {
 	}
 	if !takesValue("-u") || takesValue("-ux") || !takesValue("--argv0") {
 		t.Error("takesValue: -u and --argv0 take the next word, -ux does not")
+	}
+}
+
+// agy review of #475 (3f44d4f7).
+func TestReview475Round12(t *testing.T) {
+	// printf padded past its cap is too large, not a truncated script
+	if _, err := Lines(`printf '%1048576s%b\n' '' '\147ss push' | bash`); !errors.Is(err, ErrTooBig) {
+		t.Errorf("printf past maxPrinted: err %v, want ErrTooBig", err)
+	}
+	// \c in %b ends printf: nothing after it is printed
+	if got, ok := printfText(`%b%s`, []string{`\147ss push\c`, "x"}); !ok || got != "gss push" {
+		t.Errorf(`printf %%b ...\c then %%s = %q, %v; want "gss push"`, got, ok)
+	}
+	// many statements sharing a large heredoc run out the budget, fast
+	var b strings.Builder
+	b.WriteString("{ ")
+	for i := range 5000 {
+		fmt.Fprintf(&b, "eval '#%d'; ", i)
+	}
+	b.WriteString("} <<E\n" + strings.Repeat(`a\b `, 200000) + "\nE\ngss push\n")
+	start := time.Now()
+	if _, err := Lines(b.String()); !errors.Is(err, ErrTooBig) {
+		t.Errorf("5000 evals sharing an 800 KB heredoc: err %v, want ErrTooBig", err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("5000 evals sharing an 800 KB heredoc took %v", d)
+	}
+	for _, p := range []string{"/proc/thread-self/fd/0", "/proc/123/fd/0", "/proc/self/task/9/fd/0", "/dev/fd/0"} {
+		if !isStdin(p) {
+			t.Errorf("isStdin(%q) = false", p)
+		}
+	}
+	if isStdin("/proc/self/fd/1") {
+		t.Error("isStdin(/proc/self/fd/1) = true")
 	}
 }
