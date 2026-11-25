@@ -641,7 +641,19 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     assert_exit 2 Bash "env -S \$'X=( \\x67ff set gss.approval-token.enabled false'" 'parsed: env -S reads ( as a character'
     assert_exit 2 Bash $'source -- /dev/stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: source -- /dev/stdin reads its heredoc'
     assert_exit 2 Bash $'eval bash <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: eval bash reads the heredoc'
-    assert_exit 2 Bash $'bash -c bash <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: bash -c bash reads the heredoc' )
+    assert_exit 2 Bash $'bash -c bash <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: bash -c bash reads the heredoc'
+    # review of #475 (d8ae013e): text piped into a shell
+    assert_exit 2 Bash "echo 'gff set gss.approval-token.enabled false' | bash" 'parsed: echo | bash runs the text'
+    assert_exit 2 Bash "printf '%s\\n' 'rm ~/.config/gff/config.yaml' | sh" 'parsed: printf | sh runs the text'
+    assert_exit 2 Bash $'cat <<\'E\' | bash\ngff set gss.approval-token.enabled false\nE' 'parsed: cat heredoc | bash runs the body'
+    assert_exit 0 Bash "echo 'gff set gss.approval-token.enabled false' | grep -c gff" 'parsed: echo | grep is not run'
+    assert_exit 0 Bash "echo 'gff set gss.approval-token.enabled false' | bash -c 'wc -l'" 'parsed: echo | bash -c reads data'
+    # agy review of #475 (d8ae013e)
+    assert_exit 2 Bash "{ :; } <<< \"\$(\$'\\x67ff' set gss.approval-token.enabled false)\"" "parsed: a \$(...) in a group's here-string runs"
+    assert_exit 2 Bash $'( : ) <<E\n$(gff set gss.approval-token.enabled false)\nE' "parsed: a \$(...) in a group's heredoc runs"
+    assert_exit 2 Bash "env -S \$'X=\\'\\\\\\'\\' \\x67ff set gss.approval-token.enabled false'" "parsed: env -S reads \\' inside '...'"
+    assert_exit 2 Bash "env -a x bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env -a takes a value'
+    assert_exit 2 Bash $'bash <<-\'E\'\n\tg\\\n\tff set gss.approval-token.enabled false\nE' 'parsed: <<- strips the tabs before the inner shell joins lines' )
   # a gss too old for --format: argv exits 1, the text check stands alone and
   # whatever it printed is dropped
   OLD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-oldgss.XXXXXX")"

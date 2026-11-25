@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"mvdan.cc/sh/v3/syntax"
 )
 
 func TestLines(t *testing.T) {
@@ -49,7 +51,7 @@ func TestLines(t *testing.T) {
 		{"heredoc keeps its lines", "bash <<'EOF'\nset -e\ngff set k v\nEOF\n", []string{"bash <<EOF", "set -e", "gff set k v"}},
 		{"quoted heredoc keeps backslashes", "bash <<'EOF'\necho \\\\; gss push\nEOF\n", []string{"bash <<EOF", `echo \`, "gss push"}},
 		{"bash -c script keeps its lines", "bash -c $'echo hi\\ngss push'", []string{"bash -c echo_hi_gss_push", "echo hi", "gss push"}},
-		{"a path in a script does not erase the script", "bash -c 'gss push; : a/../b'", []string{"bash -c b", "gss push", ": b"}},
+		{"a path in a script does not erase the script", "bash -c 'gss push; : a/../b'", []string{"bash -c b_gss_push_:_b", "gss push", ": b"}},
 		{"here-string into a shell", "bash <<< $'\\x67ss push'", []string{"bash <<<gss_push", "gss push"}},
 		{"bash -c --", "bash -c -- 'gss push'", []string{"bash -c -- gss_push", "gss push"}},
 		{"bash -o pipefail -c", "bash -o pipefail -c 'gss push'", []string{"bash -o pipefail -c gss_push", "gss push"}},
@@ -67,7 +69,7 @@ func TestLines(t *testing.T) {
 		{"an = inside a path", "rm ~/.config/a=b/../gff/config.yaml", []string{"rm ~/.config/gff/config.yaml"}},
 		{"an = after the path", "rm ~/.config/a/../gff/x=1", []string{"rm ~/.config/gff/x=1"}},
 		{"a flag= keeps its name", "--out=a/../b", []string{"--out=b"}},
-		{"a space inside a path", "rm ~/.config/\"a b\"/../gff/c", []string{"rm ~/.config/gff/c"}},
+		{"a space inside a path", "rm ~/.config/\"a b\"/../gff/c", []string{"rm ~/.config/gff/c_~/.config/a_gff/c"}},
 		{"ssh -oK=v takes no next word", "ssh -oBatchMode=no host gss push", []string{"ssh -oBatchMode=no host gss push", "gss push"}},
 		{"sudo -uroot", "sudo -uroot bash -c 'gss push'", []string{"sudo -uroot bash -c gss_push", "gss push"}},
 		{"timeout -k5s", "timeout -k5s 10 bash -c 'gss push'", []string{"timeout -k5s 10 bash -c gss_push", "gss push"}},
@@ -101,13 +103,27 @@ func TestLines(t *testing.T) {
 		{"( bash ) heredoc", "(bash) <<'E'\ngss push\nE\n", []string{"<<E", "bash", "gss push"}},
 		{"{ bash; } here-string", "{ bash; } <<< 'gss push'", []string{"<<<gss_push", "bash", "gss push"}},
 		// agy review of #475 (4421ae47)
-		{"env -S ; is a character", "env -S 'X=; gss push'", []string{"env -S X=_gss_push", "gss push"}},
-		{"env -S ( is a character", "env -S 'X=( gss push'", []string{"env -S X=_gss_push", "gss push"}},
+		{"env -S ; is a character", "env -S 'X=; gss push'", []string{"env -S X=_gss_push", "X= gss push"}},
+		{"env -S ( is a character", "env -S 'X=( gss push'", []string{"env -S X=_gss_push", "X= gss push"}},
 		{"$'\\c\\\\' takes both backslashes", "echo $'a\\c\\\\0b'", []string{"echo a\x1c0b"}},
 		{"source -- /dev/stdin", "source -- /dev/stdin <<'E'\ngss push\nE\n", []string{"source -- /dev/stdin <<E", "gss push"}},
 		{"eval bash heredoc", "eval bash <<'E'\ngss push\nE\n", []string{"eval bash <<E", "bash", "gss push"}},
 		{"bash -c bash heredoc", "bash -c bash <<'E'\ngss push\nE\n", []string{"bash -c bash <<E", "bash", "gss push"}},
 		{"a > redirect is not stdin", "{ bash -c 'echo hi'; } >/dev/null", []string{">/dev/null", "bash -c echo_hi", "echo hi"}},
+		// review of #475 (d8ae013e): text piped into a shell
+		{"echo | bash", "echo 'gss push' | bash", []string{"gss push", "echo gss_push", "bash"}},
+		{"printf | sh -s", "printf '%s\\n' 'gss push' | sh -s", []string{"%s", "gss push", "printf %s\\n gss_push", "sh -s"}},
+		{"cat heredoc | bash", "cat <<'E' | bash\ngss push\nE\n", []string{"gss push", "cat <<E", "bash"}},
+		{"echo | bash -c is not stdin", "echo 'gss push' | bash -c 'wc -l'", []string{"echo gss_push", "bash -c wc_-l", "wc -l"}},
+		{"echo | bash script is not stdin", "echo 'gss push' | bash ./run.sh", []string{"echo gss_push", "bash ./run.sh"}},
+		// agy review of #475 (d8ae013e)
+		{"$(...) in a group's here-string", "{ :; } <<< \"$(gss push)\"", []string{"<<<$_...", ":", "gss push"}},
+		{"$(...) in a group's heredoc", "( : ) <<E\n$(gss push)\nE\n", []string{"<<E", ":", "gss push"}},
+		{"<<- strips tabs", "bash <<-'E'\n\tg\\\n\tss push\nE\n", []string{"bash <<-E", "gss push"}},
+		{"<<- unquoted keeps a continued line's tab", "cat <<-E\n\tg\\\n\tss push\nE\n", []string{"cat <<-E"}},
+		{"env -a x", "env -a x bash -c 'gss push'", []string{"env -a x bash -c gss_push", "gss push"}},
+		{"env -S keeps NAME=", "env -S 'G=~/.config/gff/c git x a/../../b'", []string{"env -S G=~/.config/b_~/.config/gff/c_git_x_../b", "G=~/.config/gff/c git x ../b"}},
+		{"heredoc read by bash in it, once", "bash <<'E'\n" + strings.Repeat("bash;", 20) + "\nE\n", append([]string{"bash <<E"}, slices.Repeat([]string{"bash"}, 20)...)},
 		{"bash -s reads stdin", "bash -s x <<'IN'\ngss push\nIN\n", []string{"bash -s x <<IN", "gss push"}},
 		{"message text is one word", `git commit -m "gss push; gff set x"`, []string{"git commit -m gss_push_gff_set_x"}},
 	}
@@ -197,11 +213,42 @@ func TestEnvSplit(t *testing.T) {
 		`a\cb c`:        {"a"},
 		`"x\_y" z`:      {"x y", "z"},
 		`X=( b|c`:       {"X=(", "b|c"},
+		`X='\'' b`:      {"X='", "b"},
+		`'a\\b'`:        {`a\b`},
 		`printf [%s] a`: {"printf", "[%s]", "a"},
 	}
 	for in, want := range cases {
 		if got := envSplit(in); !reflect.DeepEqual(got, want) {
 			t.Errorf("envSplit(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// One heredoc read by many shells is parsed once, so a short command cannot
+// spend the work budget before a later line (review of #475, d8ae013e).
+func TestSharedHeredocParsedOnce(t *testing.T) {
+	src := "{ " + strings.Repeat("bash; ", 60) + "} <<< '" + strings.Repeat(":;", 600) + "'\ngss push\n"
+	ls, err := Lines(src)
+	if err != nil || !slices.Contains(ls, "gss push") {
+		t.Fatalf("err %v; the line after the shared here-string was not reached (%d lines)", err, len(ls))
+	}
+}
+
+// heredoc bodies match what bash gives cat (checked with od -c): <<- strips
+// leading tabs, and an unquoted body joins \<newline> first.
+func TestHeredocBodies(t *testing.T) {
+	cases := map[string]string{
+		"cat <<-'Q'\n\tg\\\n\tss push\nQ\n": "g\\\nss push\n",
+		"cat <<-E\n\tg\\\n\tss push\nE\n":   "g\tss push\n",
+		"cat <<'Q'\n\tx\nQ\n":               "\tx\n",
+	}
+	for src, want := range cases {
+		f, err := syntax.NewParser().Parse(strings.NewReader(src), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := heredoc(f.Stmts[0].Redirs[0]); got != want {
+			t.Errorf("heredoc(%q) = %q, want %q", src, got, want)
 		}
 	}
 }

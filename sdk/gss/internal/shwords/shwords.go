@@ -44,6 +44,20 @@ var ErrTooBig = errors.New("command too large to parse")
 type walk struct {
 	out   []string
 	steps int
+	seen  map[string]bool // scripts already parsed: one heredoc read by 60 shells is parsed once
+}
+
+// script parses a nested script once; bash runs the statements before a
+// syntax error, and so do we.
+func (w *walk) script(src string, depth int, stdin []*syntax.Redirect) {
+	if w.seen == nil {
+		w.seen = map[string]bool{}
+	}
+	if w.seen[src] {
+		return
+	}
+	w.seen[src] = true
+	_ = w.lines(src, depth, stdin)
 }
 
 // spend counts one unit of work and reports whether the budget holds.
@@ -91,6 +105,11 @@ func (w *walk) visit(n syntax.Node, depth int, stdin []*syntax.Redirect) {
 		if !w.spend() {
 			return false
 		}
+		if b, ok := m.(*syntax.BinaryCmd); ok && depth < maxDepth {
+			for _, inner := range pipedScript(b) {
+				w.script(inner, depth+1, nil)
+			}
+		}
 		st, ok := m.(*syntax.Stmt)
 		if !ok {
 			return true
@@ -102,6 +121,11 @@ func (w *walk) visit(n syntax.Node, depth int, stdin []*syntax.Redirect) {
 		w.stmt(st, depth, eff)
 		if _, simple := st.Cmd.(*syntax.CallExpr); !simple && st.Cmd != nil && len(eff) > 0 {
 			w.visit(st.Cmd, depth, eff)
+			// the redirections themselves: a $(...) in a here-string or an
+			// unquoted heredoc runs too
+			for _, r := range st.Redirs {
+				w.visit(r, depth, stdin)
+			}
 			return false
 		}
 		return true
@@ -152,7 +176,7 @@ func (w *walk) stmt(st *syntax.Stmt, depth int, stdin []*syntax.Redirect) {
 	}
 	for _, inner := range w.nested(raw, stdin, depth) {
 		// bash runs the statements before a syntax error, and so do we
-		_ = w.lines(inner, depth+1, stdin)
+		w.script(inner, depth+1, stdin)
 	}
 }
 
@@ -182,7 +206,7 @@ type wrapper struct {
 }
 
 var wrappers = map[string]wrapper{
-	"env":     {"uSCP", []string{"--unset", "--chdir", "--split-string"}},
+	"env":     {"uSCPa", []string{"--unset", "--chdir", "--split-string", "--argv0"}},
 	"command": {}, "builtin": {}, "nohup": {}, "setsid": {},
 	"exec":    {"a", nil},
 	"sudo":    {"ugpChDrtUT", []string{"--user", "--group", "--host", "--prompt", "--chdir", "--close-from", "--role", "--type", "--command-timeout", "--other-user"}},
@@ -298,6 +322,10 @@ func (w *walk) nested(words []string, redirs []*syntax.Redirect, depth int) []st
 		// env -S: the command env runs after its split options gets a line of
 		// its own, and is followed like any other
 		if k, again := skipWrappers(split); again == nil && k < len(split) {
+			// from the first NAME=VALUE on, so an assignment stays on the line
+			for k > 1 && strings.Contains(split[k-1], "=") && !strings.HasPrefix(split[k-1], "-") {
+				k--
+			}
 			parts := make([]string, 0, len(split)-k)
 			for _, a := range split[k:] {
 				parts = append(parts, token(a))
@@ -363,7 +391,10 @@ func envSplit(s string) []string {
 		c := s[i]
 		switch {
 		case in == '\'':
-			if c == '\'' {
+			if c == '\\' && i+1 < len(s) && (s[i+1] == '\'' || s[i+1] == '\\') {
+				i++ // GNU env: \' and \\ inside '...'
+				cur.WriteByte(s[i])
+			} else if c == '\'' {
 				in = 0
 			} else {
 				cur.WriteByte(c)
@@ -423,7 +454,22 @@ func isStdin(p string) bool {
 // there is no script file operand (or -s, or the operand is stdin), the
 // body of its heredoc or here-string.
 func shellScripts(args []string, redirs []*syntax.Redirect) []string {
-	c, s, j := false, false, 0
+	c, j, s := shellOptions(args)
+	if c {
+		if j < len(args) {
+			return []string{args[j]}
+		}
+		return nil
+	}
+	if j < len(args) && !s && !isStdin(args[j]) {
+		return nil // stdin is the script's data, not a script
+	}
+	return stdinScripts(redirs)
+}
+
+// shellOptions reads a shell's options: whether one has c, the index of
+// the first operand, and whether one has s.
+func shellOptions(args []string) (c bool, j int, s bool) {
 options:
 	for ; j < len(args); j++ {
 		a := args[j]
@@ -444,16 +490,84 @@ options:
 			j += strings.Count(a[1:], "o") + strings.Count(a[1:], "O")
 		}
 	}
-	if c {
-		if j < len(args) {
-			return []string{args[j]}
-		}
+	return c, j, s
+}
+
+// pipedScript is the text a pipeline pipes into a shell that reads its
+// script from stdin (echo '...' | bash, printf ... | sh, cat <<E | bash):
+// the arguments of echo or printf, or cat's heredoc or here-string.
+func pipedScript(b *syntax.BinaryCmd) []string {
+	if b.Op != syntax.Pipe && b.Op != syntax.PipeAll {
 		return nil
 	}
-	if j < len(args) && !s && !isStdin(args[j]) {
-		return nil // stdin is the script's data, not a script
+	right, ok := b.Y.Cmd.(*syntax.CallExpr)
+	if !ok || !readsScriptFromStdin(callWords(right)) {
+		return nil
 	}
-	return stdinScripts(redirs)
+	left, ok := b.X.Cmd.(*syntax.CallExpr)
+	if !ok {
+		return nil
+	}
+	ws := callWords(left)
+	if len(ws) == 0 {
+		return nil
+	}
+	switch path.Base(ws[0]) {
+	case "echo":
+		args := ws[1:]
+		for len(args) > 0 && strings.HasPrefix(args[0], "-") {
+			args = args[1:]
+		}
+		// as printed, and with echo -e's escapes decoded
+		text := strings.Join(args, " ")
+		return []string{text, ansiC(text)}
+	case "printf":
+		args := ws[1:]
+		if len(args) > 0 && args[0] == "--" {
+			args = args[1:]
+		}
+		if len(args) == 0 {
+			return nil
+		}
+		// the format with its escapes decoded, and the arguments one per line
+		// (printf '%s\n' 'gss push')
+		return []string{ansiC(args[0]), strings.Join(args[1:], "\n")}
+	case "cat":
+		if len(ws) == 1 {
+			return stdinScripts(b.X.Redirs)
+		}
+	}
+	return nil
+}
+
+// readsScriptFromStdin reports whether a command (past its wrappers) is a
+// shell that reads its script from stdin, or source / . of stdin.
+func readsScriptFromStdin(words []string) bool {
+	i, split := skipWrappers(words)
+	if split != nil || i >= len(words) {
+		return false
+	}
+	args := words[i+1:]
+	switch path.Base(words[i]) {
+	case "bash", "sh", "dash", "zsh", "ksh":
+		c, j, s := shellOptions(args)
+		return !c && (j >= len(args) || s || isStdin(args[j]))
+	case "source", ".":
+		if len(args) > 0 && args[0] == "--" {
+			args = args[1:]
+		}
+		return len(args) > 0 && isStdin(args[0])
+	}
+	return false
+}
+
+// callWords is the resolved words of a simple command.
+func callWords(call *syntax.CallExpr) []string {
+	ws := make([]string, 0, len(call.Args))
+	for _, a := range call.Args {
+		ws = append(ws, word(a))
+	}
+	return ws
 }
 
 // stdinScripts is the body of each heredoc and here-string in redirs.
@@ -483,15 +597,25 @@ func heredoc(r *syntax.Redirect) string {
 		}
 	}
 	var b strings.Builder
+	lineStart := true
 	for _, p := range r.Hdoc.Parts {
 		if l, ok := p.(*syntax.Lit); ok {
-			if quoted {
-				b.WriteString(l.Value)
-			} else {
-				b.WriteString(unescapeSet(l.Value, true, "$`\\\n"))
+			v := l.Value
+			if !quoted {
+				// \<newline> joins lines before <<- strips tabs, so a
+				// continued line keeps its tab (checked against bash)
+				v = unescapeSet(v, true, "$`\\\n")
 			}
+			if r.Op == syntax.DashHdoc {
+				v = stripTabs(v, lineStart) // <<- drops each line's leading tabs
+			}
+			if v != "" {
+				lineStart = strings.HasSuffix(v, "\n")
+			}
+			b.WriteString(v)
 			continue
 		}
+		lineStart = false
 		part(&b, p)
 	}
 	return b.String()
@@ -659,6 +783,15 @@ func cleanPaths(s string) string {
 	if strings.HasSuffix(p, "/") && c != "/" {
 		c += "/"
 	}
+	if strings.ContainsAny(p, " \t\n") {
+		// a path with a space (a b/../gff), or several words: clean it whole
+		// and each word, and keep both, so .. cannot erase a word
+		f := strings.Fields(p)
+		for i := range f {
+			f[i] = cleanPaths(f[i])
+		}
+		return head + c + " " + strings.Join(f, " ")
+	}
 	return head + c
 }
 
@@ -672,4 +805,18 @@ func Print(w io.Writer, src string) error {
 		}
 	}
 	return perr
+}
+
+// stripTabs drops the tabs that start each line of a <<- heredoc, as bash
+// does before it reads the body; atStart says s begins a line.
+func stripTabs(s string, atStart bool) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if atStart && s[i] == '\t' {
+			continue
+		}
+		atStart = s[i] == '\n'
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
