@@ -20,3 +20,14 @@ func TestRunIsolatedUsesOnlyItsEnvAndDir(t *testing.T) {
 		t.Fatal("RunIsolated passed without ONLY=1: the check is not running")
 	}
 }
+
+func TestRunIsolatedNilEnvInheritsNothing(t *testing.T) {
+	t.Setenv("LEAK", "yes")
+	bin := filepath.Join(t.TempDir(), "probe")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n[ -z \"$LEAK\" ]\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := RunIsolated(bin, "/", nil); err != nil {
+		t.Fatalf("nil env leaked gss's environment: %v", err)
+	}
+}

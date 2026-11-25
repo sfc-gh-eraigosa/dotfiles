@@ -9,6 +9,10 @@ import "os/exec"
 // must not see a PATH, HOME or XDG_* a command set for gss.
 func RunIsolated(bin, dir string, env []string, args ...string) error {
 	cmd := exec.Command(bin, args...)
+	if env == nil {
+		// a nil Env would mean "inherit gss's own"
+		env = []string{}
+	}
 	cmd.Env = env
 	cmd.Dir = dir
 	return cmd.Run()

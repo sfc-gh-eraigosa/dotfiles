@@ -544,6 +544,56 @@ assert_exit 2 Bash $'rm ~/.config/g\\\nff/config.yaml'                 "a gff pa
 assert_exit 2 Bash $'gff s\\\net gss.approval-token.enabled false'     "s\\<nl>et (one word) is refused"
 assert_exit 2 Bash $'gff \\\n set gss.approval-token.enabled false'    "gff, backslash-newline, then set is refused"
 assert_exit 0 Bash "gh pr comment 1 --body \"the override is ~/.config/gff/config.yaml\"" "a gh comment naming the path is still fine"
+assert_exit 2 Bash "sed --in-place 's/true/false/' ~/.config/gff/config.yaml" "sed --in-place on the gff override file is refused"
+assert_exit 2 Bash "perl -pi -e 's/true/false/' ~/.config/gff/config.yaml" "perl -pi on the gff override file is refused"
+
+# The parsed reading (#474): `gss hooks argv` resolves what a text match
+# cannot. SG_GSS_BIN names a gss that has argv; else one is built from this
+# checkout when go is installed; else these cases are skipped.
+ARGV_DIR=""
+if [ -n "${SG_GSS_BIN:-}" ] && [ -x "$SG_GSS_BIN" ]; then
+    ARGV_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-argv.XXXXXX")"
+    ln -s "$SG_GSS_BIN" "$ARGV_DIR/gss"
+elif command -v go > /dev/null 2>&1; then
+    ARGV_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-argv.XXXXXX")"
+    (cd "$REPO_ROOT/sdk/gss" && go build -o "$ARGV_DIR/gss" .) > /dev/null 2>&1 || { rm -rf "$ARGV_DIR"; ARGV_DIR=""; }
+fi
+if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format=lines > /dev/null 2>&1; then
+  printf "#!/bin/sh\nexit 0\n" > "$ARGV_DIR/gff"; chmod +x "$ARGV_DIR/gff"   # the flag reads on
+  ( unset GSS_REQUIRE_APPROVAL; export PATH="$ARGV_DIR:$PATH" HOME="$ARGV_DIR/home"   # no approval token here
+    assert_exit 2 Bash $'x=\\\\\ngss push'                       'parsed: an even backslash pair does not join gss push to x='
+    assert_exit 2 Bash $'echo " # " && g\\\nss push'             'parsed: a quoted # does not stop g\<nl>ss joining'
+    assert_exit 2 Bash 'gss feature</dev/null pr --ready'        'parsed: a redirect glued to feature is gated'
+    assert_exit 2 Bash "\$'\\x67ss' push"                        "parsed: \$'\\x67ss' push is gated"
+    assert_exit 2 Bash 'bash -c "eval gss\ push"'                'parsed: gss push inside bash -c and eval is gated'
+    assert_exit 2 Bash $'bash <<EOF\ngss push\nEOF'              'parsed: gss push in a heredoc fed to bash is gated'
+    assert_exit 0 Bash $'cat <<EOF\ngss push\nEOF'               'parsed: gss push in a heredoc fed to cat is text'
+    assert_exit 2 Bash $'echo x\\\\\ngss push'                   'parsed: echo x\\ then gss push is gated'
+    assert_exit 2 Bash 'gss</dev/null push'                    'parsed: gss</dev/null push is gated'
+    assert_exit 0 Bash 'git log --grep "x" --oneline'            'parsed: plain git log runs' )
+  rm -f "$ARGV_DIR/gff"
+  ( export PATH="$ARGV_DIR:$PATH"
+    assert_exit 2 Bash $'echo \\\\\nrm ~/.config/gff/config.yaml' 'parsed: echo \\ then rm on the next line is refused'
+    assert_exit 2 Bash $'echo \\\\\ngff set gss.approval-token.enabled false' 'parsed: echo \\ then gff set is refused'
+    assert_exit 2 Bash $'echo " # " && g\\\nff set gss.approval-token.enabled false' 'parsed: a quoted # does not stop g\<nl>ff joining'
+    assert_exit 2 Bash 'rm ~/.config/gss/worktrees/../../gff/config.yaml' 'parsed: ../.. in the path is refused'
+    assert_exit 2 Bash '2>&1 gff set gss.approval-token.enabled false' 'parsed: a leading 2>&1 does not hide gff set'
+    assert_exit 2 Bash 'gff set>/dev/null gss.approval-token.enabled false' 'parsed: a redirect glued to set is refused'
+    assert_exit 2 Bash 'command gff</dev/null set gss.approval-token.enabled false' 'parsed: wrapped gff< set is refused'
+    assert_exit 2 Bash 'coproc gff set gss.approval-token.enabled false' 'parsed: coproc gff set is refused'
+    assert_exit 2 Bash "\$'\\x67ff' unset gss.approval-token.enabled" "parsed: \$'\\x67ff' unset is refused"
+    assert_exit 2 Bash 'yq -i</dev/null ".a = 1" ~/.config/gff/config.yaml' 'parsed: yq -i< on it is refused'
+    assert_exit 2 Bash 'X="a b" gff set gss.approval-token.enabled false' 'parsed: a quoted space in an assignment does not hide gff set'
+    assert_exit 2 Bash 'X="a cat" rm ~/.config/gff/config.yaml' 'parsed: a quoted "a cat" assignment is not the command'
+    assert_exit 2 Bash '2>> /dev/null gff set gss.approval-token.enabled false' 'parsed: a leading 2>> does not hide gff set'
+    assert_exit 2 Bash '<<< x gff set gss.approval-token.enabled false' 'parsed: a leading <<< does not hide gff set'
+    assert_exit 2 Bash 'env gff</dev/null set gss.approval-token.enabled false' 'parsed: env gff< set is refused'
+    assert_exit 0 Bash 'gh pr comment 1 --body "x > ~/.config/gff/config.yaml"' 'parsed: a > inside a message is text'
+    assert_exit 0 Bash 'git commit -m "gff set gss.approval-token.enabled false is refused"' 'parsed: a commit message naming gff set is text' )
+else
+  echo "SKIP: no gss with hooks argv (set SG_GSS_BIN, or install go): the parsed cases did not run"
+fi
+[ -z "$ARGV_DIR" ] || rm -rf "$ARGV_DIR"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"
