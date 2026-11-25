@@ -341,3 +341,20 @@ func TestPrintEscapes(t *testing.T) {
 		t.Errorf(`ansiC(\c?) = %q, want DEL`, got)
 	}
 }
+
+// printf %b reads octal with or without the leading 0; echo -e only with
+// it (review of #475, a8f60ff7; bash 5: printf '%b|' '\147' '\0147' '\1477'
+// prints g|g|g7|, echo -e '\147' prints \147).
+func TestPercentBOctal(t *testing.T) {
+	for in, want := range map[string]string{`\147`: "g", `\0147`: "g", `\1477`: "g7", `\01477`: "g7"} {
+		if got := percentBEscapes(in); got != want {
+			t.Errorf("percentBEscapes(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := echoEscapes(`\147`); got != `\147` {
+		t.Errorf(`echoEscapes(\147) = %q, want it literal`, got)
+	}
+	if got := printfText(`%b`, []string{`\147ss push`}); got != "gss push" {
+		t.Errorf(`printf %%b \147ss push = %q`, got)
+	}
+}

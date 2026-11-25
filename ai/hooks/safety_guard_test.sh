@@ -676,7 +676,9 @@ if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format
     assert_exit 2 Bash "printf '%*s%s\\n' 0 g 'ff set gss.approval-token.enabled false' | bash" 'parsed: printf * takes an argument'
     assert_exit 2 Bash "printf '%c%s\\n' gx 'ff set gss.approval-token.enabled false' | bash" 'parsed: printf %c prints one byte'
     assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | env -S bash" 'parsed: env -S bash reads the pipe'
-    assert_exit 2 Bash $'cat -u <<\'E\' | bash\ngff set gss.approval-token.enabled false\nE' 'parsed: cat -u passes the heredoc' )
+    assert_exit 2 Bash $'cat -u <<\'E\' | bash\ngff set gss.approval-token.enabled false\nE' 'parsed: cat -u passes the heredoc'
+    # review of #475 (a8f60ff7)
+    assert_exit 2 Bash "printf '%b' '\\147ff set gss.approval-token.enabled false' | bash" 'parsed: printf %b reads \\147 as octal' )
   # a gss too old for --format: argv exits 1, the text check stands alone and
   # whatever it printed is dropped
   OLD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-oldgss.XXXXXX")"

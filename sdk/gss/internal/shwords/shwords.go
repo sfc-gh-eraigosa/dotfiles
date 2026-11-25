@@ -560,16 +560,30 @@ func pipedScript(b *syntax.BinaryCmd) []string {
 // other letters, \0NNN octal, \xHH, \uHHHH, \UHHHHHHHH; a NUL is printed and
 // the text goes on, and \c ends all output.
 func echoEscapes(s string) string {
-	return printEscapes(s, false)
+	return printEscapes(s, escEcho)
+}
+
+// percentBEscapes decodes printf %b's argument: as echo -e, but an octal
+// escape is also \NNN without the 0 (bash: %b of \147 is g).
+func percentBEscapes(s string) string {
+	return printEscapes(s, escPercentB)
 }
 
 // formatEscapes decodes the text of a printf format between conversions:
 // as echo -e, but an octal escape is \NNN and \c is not special.
 func formatEscapes(s string) string {
-	return printEscapes(s, true)
+	return printEscapes(s, escFormat)
 }
 
-func printEscapes(s string, format bool) string {
+// The three escape dialects of echo -e, printf %b and a printf format.
+const (
+	escEcho = iota
+	escPercentB
+	escFormat
+)
+
+func printEscapes(s string, mode int) string {
+	format := mode == escFormat
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' || i+1 == len(s) {
@@ -587,9 +601,9 @@ func printEscapes(s string, format bool) string {
 			b.WriteByte('\\')
 		case c == 'c' && !format:
 			return b.String()
-		case c >= '0' && c <= '7' && (format || c == '0'):
+		case c >= '0' && c <= '7' && (mode != escEcho || c == '0'):
 			j := i
-			if !format {
+			if c == '0' && mode != escFormat {
 				j++ // \0 then up to three digits
 			}
 			k := j
@@ -684,7 +698,7 @@ func printfText(format string, args []string) string {
 				arg, args, used = args[0], args[1:], true
 			}
 			if format[j] == 'b' {
-				arg = echoEscapes(arg)
+				arg = percentBEscapes(arg)
 			}
 			if format[j] == 'c' && len(arg) > 1 {
 				arg = arg[:1]
