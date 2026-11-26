@@ -511,7 +511,7 @@ func (e Executor) RunHostCtx(ctx context.Context, host string, p updplan.Plan) H
 			res := Result{Step: st.ID, Kind: st.Kind, Status: DepFailed, Reason: "blocked by " + blocker}
 			status[st.ID] = res.Status
 			rep.Results = append(rep.Results, res)
-			noteOutcome(w, res)
+			e.noteOutcome(w, host, res)
 			e.fireDueRestores(w, host, p, pending, st.ID, &rep)
 			continue
 		}
@@ -524,7 +524,7 @@ func (e Executor) RunHostCtx(ctx context.Context, host string, p updplan.Plan) H
 		}
 		status[st.ID] = res.Status
 		rep.Results = append(rep.Results, res)
-		noteOutcome(w, res)
+		e.noteOutcome(w, host, res)
 
 		if st.Kind == updplan.KindSync {
 			e.armAndMaybeRestoreNow(w, host, p, st, res, pending, &rep)
@@ -543,24 +543,53 @@ func (e Executor) RunHostCtx(ctx context.Context, host string, p updplan.Plan) H
 	return rep
 }
 
-// noteOutcome writes a skipped, failed or dependency-failed step's outcome
-// into the capture as a stderr line, so the run log says what happened and
-// `fleet history` / the TUI badge count it as a warning. Without it a sync
-// skipped on a dirty clone left only "state=dirty branch=main" in the log:
-// every later step was silently absent, and the run read as finished with
-// no warnings. OK and Cancelled steps write nothing (a cancel already
-// changes the capture's footer).
-func noteOutcome(w LineWriter, res Result) {
-	switch res.Status {
-	case Skipped, Failed, DepFailed:
-	default:
-		return
+// stderrEmitter is a StepIO that can carry a line fleet itself writes down
+// the SAME stderr path the remote's stderr takes. After RunHostCtx tees it,
+// that one call reaches every consumer: the caller's stderr (the TUI's
+// errors pane and live badge) or its Line when it has none (the CLI's
+// terminal), and the capture with StderrMark (`fleet history`). Writing to
+// the capture alone would let the live badge and history disagree about the
+// same run.
+type stderrEmitter interface {
+	emitStderr(host, line string) bool
+}
+
+// emitStderr sends line through ErrLine. It reports false when ErrLine is
+// unset (an IO RunHostCtx never teed), so the caller can fall back.
+func (c Console) emitStderr(host, line string) bool {
+	if c.ErrLine == nil {
+		return false
 	}
+	c.ErrLine(host, line)
+	return true
+}
+
+// noteOutcome writes a step's outcome when it did not succeed, so the run
+// log says what happened. Without it a sync skipped on a dirty clone left
+// only "state=dirty branch=main" in the log: every later step was silently
+// absent, and the run read as finished with no warnings.
+//
+//   - Skipped and Failed (a main step or a restore) go to stderr, so the
+//     live badge and `fleet history` both count them, through one
+//     classifier (histindex.WarnFilter).
+//   - DependencyFailed is the cascade of a failure already counted above, so
+//     it is written to the capture as a plain line: one dirty clone badges
+//     the run once, not once per blocked step.
+//   - OK and Cancelled write nothing (a cancel changes the capture's footer).
+func (e Executor) noteOutcome(w LineWriter, host string, res Result) {
 	line := fmt.Sprintf("fleet: step %s %s", res.Step, res.Status)
 	if res.Reason != "" {
 		line += ": " + res.Reason
 	}
-	w.Line(StderrMark + line)
+	switch res.Status {
+	case Skipped, Failed:
+		if em, ok := e.IO.(stderrEmitter); ok && em.emitStderr(host, line) {
+			return
+		}
+		w.Line(StderrMark + line)
+	case DepFailed:
+		w.Line(line)
+	}
 }
 
 // firstStopBlocker returns the id of the first need whose own status is not
@@ -647,6 +676,7 @@ func (e Executor) armAndMaybeRestoreNow(w LineWriter, host string, p updplan.Pla
 		} else {
 			rres := e.runRestore(w, host, repo, pi)
 			rep.Results = append(rep.Results, rres)
+			e.noteOutcome(w, host, rres)
 		}
 		delete(pending, repo.Name)
 	}
@@ -697,7 +727,9 @@ func (e Executor) fireDueRestores(w LineWriter, host string, p updplan.Plan, pen
 		if e.restoreDisabled(repo) {
 			e.noteRestoreDisabled(rep, stepID, pi)
 		} else {
-			rep.Results = append(rep.Results, e.runRestore(w, host, repo, pi))
+			rres := e.runRestore(w, host, repo, pi)
+			rep.Results = append(rep.Results, rres)
+			e.noteOutcome(w, host, rres)
 		}
 		delete(pending, name)
 	}
