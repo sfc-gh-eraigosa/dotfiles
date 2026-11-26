@@ -257,6 +257,140 @@ sets:
   # none=0 low=1 medium=2 high=3 critical=4 (the selected option's intValue is the
   # weight the skill multiplies each dimension score by). See the skill's
   # references/tuning.md.
+  - area: ai
+    # One flag per ai/plugins.yaml row and per server under its `mcp:` (server names
+    # are unique across the manifest), all on. sync-plugins.sh acts on a false; see
+    # docs/ai-plugins.md "Slimming a host".
+    features:
+      - path: ai.connectors.claude-ai
+        description: "The claude.ai connectors (Gmail, Drive, Calendar, Slack, …) in Claude Code on this host. false makes sync-plugins set disableClaudeAiConnectors: true in ~/.claude/settings.json; true removes it again if sync-plugins set it."
+        boolDefault: true
+      - path: ai.plugin.superpowers
+        description: "Claude Code plugin superpowers@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable superpowers@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.github
+        description: "Claude Code plugin github@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable github@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.mcp.github
+        description: "The github MCP server of github@claude-plugins-official. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.plugin.code-review
+        description: "Claude Code plugin code-review@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable code-review@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.skill-creator
+        description: "Claude Code plugin skill-creator@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable skill-creator@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.claude-md-management
+        description: "Claude Code plugin claude-md-management@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable claude-md-management@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.pr-review-toolkit
+        description: "Claude Code plugin pr-review-toolkit@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable pr-review-toolkit@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.gopls-lsp
+        description: "Claude Code plugin gopls-lsp@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable gopls-lsp@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.remember
+        description: "Claude Code plugin remember@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable remember@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.deploy-on-aws
+        description: "Claude Code plugin deploy-on-aws@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable deploy-on-aws@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.mcp.awsiac
+        description: "The awsiac MCP server of deploy-on-aws@claude-plugins-official. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.mcp.awspricing
+        description: "The awspricing MCP server of deploy-on-aws@claude-plugins-official. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.mcp.awsknowledge
+        description: "The awsknowledge MCP server of deploy-on-aws@claude-plugins-official. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.plugin.aws-serverless
+        description: "Claude Code plugin aws-serverless@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable aws-serverless@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.mcp.aws-serverless-mcp
+        description: "The aws-serverless-mcp MCP server of aws-serverless@claude-plugins-official. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.plugin.aws-core
+        description: "Claude Code plugin aws-core@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable aws-core@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.mcp.aws-mcp
+        description: "The aws-mcp MCP server of aws-core@claude-plugins-official. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.plugin.mcp-apps
+        description: "Claude Code plugin mcp-apps@claude-plugins-official on this host. false makes sync-plugins run claude plugin disable mcp-apps@claude-plugins-official (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.andrej-karpathy-skills
+        description: "Claude Code plugin andrej-karpathy-skills@karpathy-skills on this host. false makes sync-plugins run claude plugin disable andrej-karpathy-skills@karpathy-skills (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.pdf-viewer
+        description: "Claude Code plugin pdf-viewer@synced on this host. false makes sync-plugins run claude plugin disable pdf-viewer@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.mcp.pdf
+        description: "The pdf MCP server of pdf-viewer@synced. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.plugin.browser-use
+        description: "Claude Code plugin browser-use@synced on this host. false makes sync-plugins run claude plugin disable browser-use@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.mcp.browser-use
+        description: "The browser-use MCP server of browser-use@synced. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.plugin.figma
+        description: "Claude Code plugin figma@synced on this host. false makes sync-plugins run claude plugin disable figma@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.mcp.figma
+        description: "The figma MCP server of figma@synced. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.plugin.grafana-cloud-mcp
+        description: "Claude Code plugin grafana-cloud-mcp@synced on this host. false makes sync-plugins run claude plugin disable grafana-cloud-mcp@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.mcp.grafana-cloud
+        description: "The grafana-cloud MCP server of grafana-cloud-mcp@synced. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.plugin.zoom-plugin
+        description: "Claude Code plugin zoom-plugin@synced on this host. false makes sync-plugins run claude plugin disable zoom-plugin@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.mcp.zoom-mcp
+        description: "The zoom-mcp MCP server of zoom-plugin@synced. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.mcp.zoom-docs-mcp
+        description: "The zoom-docs-mcp MCP server of zoom-plugin@synced. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.mcp.zoom-whiteboard-mcp
+        description: "The zoom-whiteboard-mcp MCP server of zoom-plugin@synced. false makes sync-plugins deny it through deniedMcpServers in ~/.claude/settings.json (matched on its command or URL) while the rest of the plugin stays on; true removes that entry again."
+        boolDefault: true
+      - path: ai.plugin.operations
+        description: "Claude Code plugin operations@synced on this host. false makes sync-plugins run claude plugin disable operations@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.design
+        description: "Claude Code plugin design@synced on this host. false makes sync-plugins run claude plugin disable design@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.engineering
+        description: "Claude Code plugin engineering@synced on this host. false makes sync-plugins run claude plugin disable engineering@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.legal
+        description: "Claude Code plugin legal@synced on this host. false makes sync-plugins run claude plugin disable legal@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.product-management
+        description: "Claude Code plugin product-management@synced on this host. false makes sync-plugins run claude plugin disable product-management@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.productivity
+        description: "Claude Code plugin productivity@synced on this host. false makes sync-plugins run claude plugin disable productivity@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.marketing
+        description: "Claude Code plugin marketing@synced on this host. false makes sync-plugins run claude plugin disable marketing@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.finance
+        description: "Claude Code plugin finance@synced on this host. false makes sync-plugins run claude plugin disable finance@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.data
+        description: "Claude Code plugin data@synced on this host. false makes sync-plugins run claude plugin disable data@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.customer-support
+        description: "Claude Code plugin customer-support@synced on this host. false makes sync-plugins run claude plugin disable customer-support@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
+      - path: ai.plugin.cowork-plugin-management
+        description: "Claude Code plugin cowork-plugin-management@synced on this host. false makes sync-plugins run claude plugin disable cowork-plugin-management@synced (nothing is uninstalled) and skip its install and update; true enables it again."
+        boolDefault: true
   - area: research-rubric
     features:
       - path: research-rubric.weight.value

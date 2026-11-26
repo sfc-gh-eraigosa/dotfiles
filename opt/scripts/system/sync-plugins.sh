@@ -3,6 +3,16 @@
 # are installed, enabled, and UPDATED to latest. Ensure-only (additive): never
 # removes anything. Mirrors sync-skills.sh. Safe to re-run.
 #
+# Per host, gff flags slim it down (all on by default; features.yaml area `ai`):
+#   ai.plugin.<name>=false      claude plugin disable (never uninstall); no
+#                               install or update for it
+#   ai.mcp.<server>=false       deny that one server (deniedMcpServers in
+#                               ~/.claude/settings.json, matched on the command
+#                               or URL in the installed plugin's .mcp.json)
+#   ai.connectors.claude-ai=false  disableClaudeAiConnectors: true
+# Setting a flag back on removes only what this script wrote (it keeps a record
+# in $SYNC_PLUGINS_STATE_DIR/claude-mcp-flags.json).
+#
 # Usage:
 #   sync-plugins.sh            install + enable per the manifest
 #   sync-plugins.sh --dry-run  print planned actions, change nothing (and
@@ -93,6 +103,21 @@ run() {
         echo "sync-plugins: WARNING — '$*' failed (rc=$rc); continuing." >&2
     fi
 }
+
+# shellcheck source=../../lib/gff.sh
+. "${BASE_DIR}/opt/lib/gff.sh"
+# Run from install.sh the GFF_* flags are already exported; run by hand, read
+# them from gff (fail-open: no gff means every flag is on).
+# SYNC_PLUGINS_GFF_EXPORT=0 skips this (tests set GFF_* themselves).
+if [ "${SYNC_PLUGINS_GFF_EXPORT:-1}" != "0" ] && ! env | grep -q '^GFF_' && command -v gff >/dev/null 2>&1; then
+    set -a
+    eval "$( (cd "$BASE_DIR" && gff export --shell) 2>/dev/null)"
+    set +a
+fi
+
+CLAUDE_PLUGINS_DIR="${CLAUDE_PLUGINS_DIR:-$HOME/.claude/plugins}"
+CLAUDE_SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
+SYNC_PLUGINS_STATE_DIR="${SYNC_PLUGINS_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles}"
 
 if ! command -v yq >/dev/null 2>&1; then
     echo "sync-plugins: 'yq' not found. Install it via opt/scripts/system/install_yq.sh" >&2
@@ -206,14 +231,133 @@ sync_claude() {
     # `claude plugin install` is a no-op on an existing install, and the
     # per-marketplace autoUpdate setting is unset by default.
     run claude plugin marketplace update
-    # Install + enable + update each enabled plugin that has a claude.plugin.
-    while IFS= read -r plugin; do
+    # Install + enable + update each enabled plugin that has a claude.plugin,
+    # unless its ai.plugin.<name> flag is off on this host: then disable it.
+    # A synced row (claude.ai account) is only ever enabled or disabled.
+    while IFS='|' read -r name plugin synced; do
         { [ -z "$plugin" ] || [ "$plugin" = "null" ]; } && continue
+        if ! gff_on "ai.plugin.$name"; then
+            disable_claude_plugin "$plugin"
+            continue
+        fi
+        if [ "$synced" = "true" ]; then
+            enable_claude_plugin "$plugin"
+            continue
+        fi
         run claude plugin install "$plugin"
         enable_claude_plugin "$plugin"
         # Converge to latest (no-op when current; a restart picks up changes).
         update_claude_plugin "$plugin"
-    done < <(yq '.plugins[] | select(.enabled == true) | select(.claude.plugin != null) | .claude.plugin' "$MANIFEST")
+    done < <(yq '.plugins[] | select(.enabled == true) | select(.claude.plugin != null) | .name + "|" + .claude.plugin + "|" + ((.claude.synced // false) | tostring)' "$MANIFEST")
+}
+
+# disable_claude_plugin <plugin> — the ai.plugin.<name>=false path. Quiet when
+# it is already disabled or not installed here (nothing to turn off).
+disable_claude_plugin() {
+    local plugin="$1" out rc=0
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "DRY-RUN: claude plugin disable $plugin"
+        return 0
+    fi
+    echo "+ claude plugin disable $plugin (gff: ai.plugin flag is false)"
+    out="$("${GUARD[@]+"${GUARD[@]}"}" claude plugin disable "$plugin" </dev/null 2>&1)" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+        [ -n "$out" ] && echo "$out"
+    elif printf '%s' "$out" | grep -qiE "already disabled|not installed|not found"; then
+        echo "  ($plugin already off)"
+    else
+        printf '%s\n' "$out" >&2
+        echo "sync-plugins: WARNING — disable $plugin failed; continuing." >&2
+    fi
+}
+
+# plugin_mcp_file <plugin id> <name> <synced> — the .mcp.json of the plugin as
+# installed on this host: an install's installPath (installed_plugins.json),
+# or the account's synced copy (synced/<account>/<name>[~gN]/). Empty if none.
+plugin_mcp_file() {
+    local f p
+    if [ "$3" = "true" ]; then
+        for f in "$CLAUDE_PLUGINS_DIR"/synced/*/"$2"/.mcp.json "$CLAUDE_PLUGINS_DIR"/synced/*/"$2"~*/.mcp.json; do
+            [ -f "$f" ] && { printf '%s\n' "$f"; return 0; }
+        done
+        return 0
+    fi
+    p="$(jq -r --arg id "$1" '.plugins[$id][0].installPath // empty' "$CLAUDE_PLUGINS_DIR/installed_plugins.json" 2>/dev/null)"
+    [ -n "$p" ] && [ -f "$p/.mcp.json" ] && printf '%s\n' "$p/.mcp.json"
+    return 0
+}
+
+# deny_entry <.mcp.json> <server> — the deniedMcpServers entry that matches
+# that server: its exact command line, or its URL. Empty if it has neither.
+deny_entry() {
+    jq -c --arg s "$2" '(.mcpServers // .)[$s] // empty
+        | if .command then {serverCommand: ([.command] + (.args // []))}
+          elif (.url // "") != "" then {serverUrl: .url}
+          else empty end' "$1" 2>/dev/null
+}
+
+# sync_mcp_flags — apply the ai.mcp.<server> and ai.connectors.claude-ai flags
+# to ~/.claude/settings.json. Entries this script added earlier (the state
+# file) are replaced by the current set, so a flag turned back on is undone;
+# anything else in the file is left alone.
+sync_mcp_flags() {
+    local want="[]" off=false name plugin synced servers s f e
+    gff_on ai.connectors.claude-ai || off=true
+    if ! command -v jq >/dev/null 2>&1; then
+        if [ "$off" = "true" ] || env | grep -q '^GFF_AI_MCP_.*=false$'; then
+            echo "sync-plugins: WARNING — jq is not on PATH; the ai.mcp/ai.connectors flags were not applied." >&2
+        fi
+        return 0
+    fi
+    while IFS='|' read -r name plugin synced servers; do
+        gff_on "ai.plugin.$name" || continue # the plugin is off: none of its servers load
+        for s in $servers; do
+            gff_on "ai.mcp.$s" && continue
+            e=""
+            f="$(plugin_mcp_file "$plugin" "$name" "$synced")"
+            [ -n "$f" ] && e="$(deny_entry "$f" "$s")"
+            if [ -z "$e" ]; then
+                echo "sync-plugins: WARNING — ai.mcp.$s is false, but $plugin has no '$s' server installed here; not denied." >&2
+                continue
+            fi
+            [ "$DRY_RUN" = "1" ] && echo "DRY-RUN: deny MCP server $s $e"
+            want="$(jq -c --argjson e "$e" 'if any(.[]; . == $e) then . else . + [$e] end' <<<"$want")"
+        done
+    done < <(yq '.plugins[] | select(.enabled == true) | select(.claude.plugin != null) | select(.mcp != null) | .name + "|" + .claude.plugin + "|" + ((.claude.synced // false) | tostring) + "|" + (.mcp | join(" "))' "$MANIFEST")
+    if [ "$DRY_RUN" = "1" ]; then
+        [ "$off" = "true" ] && echo "DRY-RUN: disableClaudeAiConnectors: true in $CLAUDE_SETTINGS_FILE"
+        return 0
+    fi
+    local state="$SYNC_PLUGINS_STATE_DIR/claude-mcp-flags.json" prev cur new newstate
+    prev='{"denied":[],"connectors":false}'
+    [ -f "$state" ] && prev="$(jq -c '{denied: (.denied // []), connectors: (.connectors // false)}' "$state" 2>/dev/null || echo "$prev")"
+    # Nothing asked for and nothing of ours to undo: leave the file untouched.
+    if [ "$want" = "[]" ] && [ "$off" = "false" ] && [ "$prev" = '{"denied":[],"connectors":false}' ]; then
+        return 0
+    fi
+    cur='{}'
+    [ -s "$CLAUDE_SETTINGS_FILE" ] && cur="$(cat "$CLAUDE_SETTINGS_FILE")"
+    new="$(jq --argjson prev "$prev" --argjson want "$want" --argjson off "$off" '
+        ((.deniedMcpServers // []) | map(. as $x | select(any($prev.denied[]; . == $x) | not))) as $kept
+        | ($kept + ($want | map(. as $x | select(any($kept[]; . == $x) | not)))) as $denied
+        | (if ($denied | length) > 0 then .deniedMcpServers = $denied else del(.deniedMcpServers) end)
+        | if $off then .disableClaudeAiConnectors = true
+          elif $prev.connectors then del(.disableClaudeAiConnectors)
+          else . end' <<<"$cur")" || {
+        echo "sync-plugins: WARNING — $CLAUDE_SETTINGS_FILE is not valid JSON; the ai.mcp/ai.connectors flags were not applied." >&2
+        return 0
+    }
+    newstate="$(jq -c -n --argjson prev "$prev" --argjson want "$want" --argjson off "$off" --argjson cur "$cur" '
+        ((($cur.deniedMcpServers // []) | map(. as $x | select(any($prev.denied[]; . == $x) | not)))) as $kept
+        | {denied: ($want | map(. as $x | select(any($kept[]; . == $x) | not))),
+           connectors: ($off and ($prev.connectors or ($cur.disableClaudeAiConnectors != true)))}')"
+    if [ "$(jq -S . <<<"$cur")" != "$(jq -S . <<<"$new")" ]; then
+        mkdir -p "$(dirname "$CLAUDE_SETTINGS_FILE")"
+        printf '%s\n' "$new" > "$CLAUDE_SETTINGS_FILE"
+        echo "sync-plugins: updated MCP flags in $CLAUDE_SETTINGS_FILE ($(jq 'length' <<<"$want") server(s) denied, claude.ai connectors $([ "$off" = "true" ] && echo off || echo on)); restart Claude Code sessions to apply."
+    fi
+    mkdir -p "$SYNC_PLUGINS_STATE_DIR"
+    printf '%s\n' "$newstate" > "$state"
 }
 
 # Names of currently-installed Antigravity plugins, one per line. The empty
@@ -293,7 +437,7 @@ ${name}"
 check_uvx_prereq() {
     command -v uvx >/dev/null 2>&1 && return 0
     local need
-    need="$(yq '.plugins[] | select(.enabled == true) | select(.name == "deploy-on-aws" or .name == "aws-serverless" or .name == "aws-core") | .name' "$MANIFEST" 2>/dev/null | tr '\n' ' ')"
+    need="$(yq '.plugins[] | select(.enabled == true) | select(.name == "deploy-on-aws" or .name == "aws-serverless" or .name == "aws-core") | .name' "$MANIFEST" 2>/dev/null | while IFS= read -r n; do gff_on "ai.plugin.$n" && printf '%s ' "$n"; done)"
     need="${need% }"
     [ -z "$need" ] && return 0
     echo "sync-plugins: WARNING — uvx is not on PATH; the MCP server(s) for: $need will fail to connect. Install uv (https://docs.astral.sh/uv/getting-started/installation/), or set those plugins' 'enabled: false' in ai/plugins.yaml if they aren't needed on this host." >&2
@@ -301,6 +445,7 @@ check_uvx_prereq() {
 
 echo "Syncing AI plugins from ${MANIFEST}$([ "$DRY_RUN" = "1" ] && echo ' (dry-run)')..."
 sync_claude
+sync_mcp_flags
 sync_antigravity
 check_uvx_prereq
 echo "sync-plugins: done."

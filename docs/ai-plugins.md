@@ -18,7 +18,7 @@ sync-plugins --dry-run
 sync-plugins
 ```
 
-The synchronization is **ensure-only**: it installs, enables, and **updates to latest** what is listed, but never removes existing extensions.
+The synchronization is **ensure-only**: it installs, enables, and **updates to latest** what is listed, but never removes existing extensions. A host can switch individual plugins and MCP servers off with gff flags (see [Slimming a host](#-slimming-a-host)); that disables, it never uninstalls.
 
 ## 🤖 Supported Assistants
 
@@ -61,6 +61,26 @@ Focused correctness review of the current diff or a specific PR.
 - **Try**: `/code-review` (Claude) or use the code-review agent (Antigravity).
 
 ---
+
+## 🪶 Slimming a host
+
+Every plugin row in `ai/plugins.yaml`, every server under a row's `mcp:`, and the claude.ai connectors each have a gff flag, **on by default** (area `ai` in `.github/gff/features.yaml`). Each running Claude Code session starts its own copy of every local MCP server (the `uvx` and `npx` ones), so on a small board like the Jetson they cost real memory. Turn off what the host does not use, then re-run the sync:
+
+| Flag | false means | How |
+| :-- | :-- | :-- |
+| `ai.plugin.<name>` | the plugin is off on this host | `claude plugin disable <plugin>`; no install or update for it |
+| `ai.mcp.<server>` | that one server is off; the rest of the plugin stays | an entry in `deniedMcpServers` in `~/.claude/settings.json`, matched on the server's command line or URL as the installed plugin declares it |
+| `ai.connectors.claude-ai` | the claude.ai connectors (Gmail, Drive, Calendar, Slack, …) are off | `disableClaudeAiConnectors: true` in `~/.claude/settings.json` |
+
+```bash
+gff set ai.plugin.aws-core false      # every flag: gff list | grep '^ai\.'
+gff set ai.mcp.pdf false
+gff set ai.connectors.claude-ai false
+sync-plugins --dry-run                # the plan: disables and denials
+sync-plugins                          # apply; restart Claude Code sessions
+```
+
+Setting a flag back to true (or `gff unset`) and re-syncing undoes it: the plugin is enabled again, and only the settings entries sync-plugins wrote are removed (it records them in `~/.local/state/dotfiles/claude-mcp-flags.json`); entries and a connectors switch you set by hand stay. Plugins synced from the claude.ai account appear as `<name>@synced` rows with `synced: true`: they have flags too, but sync-plugins only enables or disables them. A server named in `mcp:` that the installed plugin no longer declares is reported with a warning and not denied.
 
 ## ➕ Adding a New Plugin
 
