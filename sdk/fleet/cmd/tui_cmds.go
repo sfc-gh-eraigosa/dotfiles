@@ -817,25 +817,27 @@ func savedHerdrTargets(js string) (map[string]bool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unreadable output: %w", err)
 	}
-	out := map[string]bool{}
+	return savedTargetSet(ms), nil
+}
+
+// savedTargetSet indexes machines by target, keyed exactly as
+// herdrmach.Saved matches, so the tui and `fleet herdr sync` agree.
+func savedTargetSet(ms []herdrmach.Machine) map[string]bool {
+	out := make(map[string]bool, len(ms))
 	for _, m := range ms {
-		if m.Target != "" {
-			out[m.Target] = true
-		}
+		out[m.Target] = true
 	}
-	return out, nil
+	return out
 }
 
 // listHerdrMachines is the production herdrMachines: a bounded local call,
 // since it runs on the keystroke.
 func listHerdrMachines(bin string) (map[string]bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	out, err := runLocal(ctx, bin, "machine", "list", "--json")
+	ms, err := listSavedMachines(bin)
 	if err != nil {
 		return nil, err
 	}
-	return savedHerdrTargets(out)
+	return savedTargetSet(ms), nil
 }
 
 // machineAddDone is what the machine-add handoff reports back. herdr's own

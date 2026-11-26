@@ -37,23 +37,34 @@ type herdrSyncResult struct {
 // herdrSyncDeps is every impure edge of the sync, injected so tests need no
 // herdr, no ssh config and no terminal.
 type herdrSyncDeps struct {
-	allHosts func() ([]sshconf.Host, error) // every concrete ssh-config host
-	local    func() localHost               // the machine fleet is running on
-	herdrBin func() string                  // the local herdr client; "" = not installed here
-	list     herdrmach.Runner               // runs `herdr machine list --json`
-	tty      func() bool                    // someone is there to answer herdr's prompts
-	add      func(argv []string) error      // runs `herdr machine add` attached to the terminal
+	allHosts func() ([]sshconf.Host, error)    // every concrete ssh-config host
+	local    func() localHost                  // the machine fleet is running on
+	herdrBin func() string                     // the local herdr client; "" = not installed here
+	list     func(bin string) herdrmach.Runner // runs `herdr machine list --json` through bin
+	tty      func() bool                       // someone is there to answer herdr's prompts
+	add      func(argv []string) error         // runs `herdr machine add` attached to the terminal
 }
 
-// herdrExec runs herdr argv through the resolved local binary.
+// herdrListTimeout bounds `herdr machine list`; the tui runs it on a keystroke.
+const herdrListTimeout = 10 * time.Second
+
+// herdrExec runs herdrmach argv through the resolved local binary.
 type herdrExec struct{ bin string }
 
 func (h herdrExec) Output(ctx context.Context, argv []string) ([]byte, error) {
-	return exec.CommandContext(ctx, h.bin, argv[1:]...).Output()
+	out, err := runLocal(ctx, h.bin, argv[1:]...)
+	return []byte(out), err
+}
+
+// listSavedMachines is the one bounded `herdr machine list` both the CLI and
+// the tui `S` key use.
+func listSavedMachines(bin string) ([]herdrmach.Machine, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), herdrListTimeout)
+	defer cancel()
+	return herdrmach.List(ctx, herdrExec{bin: bin})
 }
 
 func defaultHerdrSyncDeps() herdrSyncDeps {
-	bin := func() string { return localHerdr(exec.LookPath, fileExists, os.Getenv("HOME")) }
 	return herdrSyncDeps{
 		allHosts: func() ([]sshconf.Host, error) {
 			raw, err := readConfig(flagConfig)
@@ -63,8 +74,8 @@ func defaultHerdrSyncDeps() herdrSyncDeps {
 			return sshconf.Parse(raw, flagMarker)
 		},
 		local:    detectLocal,
-		herdrBin: bin,
-		list:     herdrExec{bin: bin()},
+		herdrBin: func() string { return localHerdr(exec.LookPath, fileExists, os.Getenv("HOME")) },
+		list:     func(bin string) herdrmach.Runner { return herdrExec{bin: bin} },
 		tty:      stdinIsTerminal,
 		add: func(argv []string) error {
 			// herdr may prompt to prepare the remote install, so it gets the
@@ -95,7 +106,12 @@ func herdrSyncTargets(all []sshconf.Host, me localHost, names []string) (targets
 	for _, h := range all {
 		byAlias[h.Alias] = h
 	}
+	seen := make(map[string]bool, len(names))
 	for _, n := range names {
+		if seen[n] {
+			continue // one result per host; a repeat would add it twice
+		}
+		seen[n] = true
 		h, ok := byAlias[n]
 		switch {
 		case !ok:
@@ -122,22 +138,32 @@ func runHerdrSync(ctx context.Context, d herdrSyncDeps, names []string, dryRun, 
 	}
 	targets, results := herdrSyncTargets(all, d.local(), names)
 
-	// One list for the whole run. If it fails we cannot tell what is saved,
-	// and a duplicate add would prompt, so nothing is attempted.
-	lctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	saved, err := herdrmach.List(lctx, d.list)
-	cancel()
-	if err != nil {
-		return fmt.Errorf("cannot read herdr machines: %w", err)
+	// One list for the whole run, and only when there is a host to check.
+	// If it fails we cannot tell what is saved, and a duplicate add would
+	// prompt, so nothing is attempted.
+	var saved []herdrmach.Machine
+	if len(targets) > 0 {
+		lctx, cancel := context.WithTimeout(ctx, herdrListTimeout)
+		ms, err := herdrmach.List(lctx, d.list(bin))
+		cancel()
+		if err != nil {
+			return fmt.Errorf("cannot read herdr machines: %w", err)
+		}
+		saved = ms
 	}
 
 	tty := d.tty()
 	for _, alias := range targets {
-		cmdline := strings.Join(herdrmach.AddArgv(alias), " ")
+		argv := herdrmach.AddArgv(alias)
+		cmdline := strings.Join(argv, " ")
 		r := herdrSyncResult{Host: alias}
 		switch m, ok := herdrmach.Saved(saved, alias); {
 		case ok:
-			r.Result, r.Detail = herdrAlready, "saved as "+m.Label
+			name := m.Label
+			if name == "" {
+				name = m.Target
+			}
+			r.Result, r.Detail = herdrAlready, "saved as "+name
 		case dryRun:
 			r.Result, r.Detail = herdrWouldAdd, cmdline
 		case !tty:
@@ -145,7 +171,6 @@ func runHerdrSync(ctx context.Context, d herdrSyncDeps, names []string, dryRun, 
 			// answer, say exactly what to run instead of hanging.
 			r.Result, r.Detail = herdrNeedsApproval, "run: "+cmdline
 		default:
-			argv := herdrmach.AddArgv(alias)
 			argv[0] = bin
 			if err := d.add(argv); err != nil {
 				r.Result, r.Detail = herdrFailed, fmt.Sprintf("%s: %v", cmdline, err)

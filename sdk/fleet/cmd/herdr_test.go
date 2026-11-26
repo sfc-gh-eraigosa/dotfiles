@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/herdrmach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 )
 
@@ -39,7 +40,7 @@ func syncFixture(tty bool) (herdrSyncDeps, *fakeHerdrList, *[][]string) {
 		},
 		local:    func() localHost { return localHost{Name: "me-box", IPs: []string{"10.0.0.1"}} },
 		herdrBin: func() string { return "/opt/herdr" },
-		list:     list,
+		list:     func(string) herdrmach.Runner { return list },
 		tty:      func() bool { return tty },
 		add: func(argv []string) error {
 			adds = append(adds, argv)
@@ -215,5 +216,52 @@ func TestHerdrSyncCommandIsRegistered(t *testing.T) {
 	}
 	if c.Flags().Lookup("dry-run") == nil {
 		t.Fatal("--dry-run missing")
+	}
+}
+
+// A host named twice is synced once: the saved list is read once, so a
+// second pass would run machine add again and herdr would prompt again.
+func TestSyncDedupesRepeatedHostNames(t *testing.T) {
+	d, _, adds := syncFixture(true)
+	var out bytes.Buffer
+	if err := runHerdrSync(context.Background(), d, []string{"fresh", "fresh"}, false, true, &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(*adds) != 1 {
+		t.Fatalf("adds %q, want one", *adds)
+	}
+	var rows []herdrSyncResult
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil || len(rows) != 1 {
+		t.Fatalf("rows %v, %v; want one", rows, err)
+	}
+}
+
+// With nothing to add, herdr is not asked at all, so a down herdr server
+// cannot hide the per-host failures already known.
+func TestSyncSkipsMachineListWhenNothingToSync(t *testing.T) {
+	d, list, _ := syncFixture(true)
+	list.err = errors.New("no server")
+	var out bytes.Buffer
+	err := runHerdrSync(context.Background(), d, []string{"nope"}, false, false, &out)
+	var ee exitError
+	if !errors.As(err, &ee) {
+		t.Fatalf("want exitError, got %v", err)
+	}
+	if list.calls != 0 {
+		t.Fatal("listed machines with no host to sync")
+	}
+	if !strings.Contains(out.String(), "not in ssh config") {
+		t.Fatalf("the unknown host must still be reported:\n%s", out.String())
+	}
+}
+
+// A saved machine without a label is described by its target.
+func TestSyncAlreadyDetailFallsBackToTarget(t *testing.T) {
+	d, list, _ := syncFixture(true)
+	list.out = `[{"id":"1","label":"","target":"saved"}]`
+	var out bytes.Buffer
+	_ = runHerdrSync(context.Background(), d, []string{"saved"}, false, false, &out)
+	if !strings.Contains(out.String(), "saved as saved") {
+		t.Fatalf("got:\n%s", out.String())
 	}
 }
