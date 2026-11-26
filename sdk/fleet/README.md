@@ -134,6 +134,26 @@ so ten sleeping hosts cost about one budget of wall clock rather than ten. Use
 > fleet deliberately will not do this for you: reconfiguring a machine's networking
 > as a side effect of *looking* at it is a worse surprise than a slow probe.
 
+### `fleet herdr sync [host...]`
+
+Make fleet hosts show up in the herdr you already have open, as herdr **saved
+machines** — then switch to one with `prefix+w`. With no hosts it covers every
+`#fleet` host except this machine; named hosts limit the set.
+
+```bash
+fleet herdr sync --dry-run        # what would be added; changes nothing
+fleet herdr sync                  # add the missing ones (herdr may prompt)
+fleet herdr sync pi-01 --json     # one host, machine-readable
+```
+
+Each host reports `already`, `saved`, `needs-approval` or `failed`
+(`would-add` under `--dry-run`). herdr can prompt before preparing a remote
+install, so without a terminal nothing is added and the exact
+`herdr machine add <alias> --label <alias>` to run is printed. It only ever
+adds — machines are never removed or renamed. Exits non-zero when any host is
+`needs-approval` or `failed`. The tui's `S` key does the same for one host from
+inside a herdr pane.
+
 ### `fleet tui`
 
 Real output — `FLEET_DEMO=1 go test ./cmd/ -run TestDemoFrames` frame 14, with all three

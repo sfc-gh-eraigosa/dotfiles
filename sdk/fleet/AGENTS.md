@@ -26,6 +26,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet trust <alias>` | re-trust a host whose SSH host key changed / was never accepted: shows stored vs presented fingerprints, needs the alias typed back (or `--fingerprint SHA256:…`), backs up `known_hosts`, swaps, logs WARN `host key trusted`, re-probes |
 | `fleet keys list\|sync\|enroll\|delete\|prune` | audit / authorize this machine's keys / authorize ANOTHER machine's key from one that has access / revoke one key / remove foreign keys |
 | `fleet config pull\|push\|diff` | one-way ssh-config transfer: import FROM one host, publish TO hosts, or compare without changing anything |
+| `fleet herdr sync [host...]` | save every in-fleet host except this one (or the named ones) as a herdr **saved machine**, so it shows in the local herdr sidebar (`prefix+w`); per-host `already`/`saved`/`needs-approval`/`failed`; no TTY → prints the `herdr machine add` to run instead; `--dry-run`, `--json`; additive only; exits non-zero on any `needs-approval`/`failed` |
 | `fleet wake [host...]` | rouse hosts asleep at layer 2: ladder `retry → local-prime → peer-relay`, printed rung by rung; `--json`; exits non-zero if any target stayed down |
 | `fleet history [host]` | list the captures past updates left behind (newest first: when · host · finished/unfinished · ⚠N · size); naming a host narrows to it. `--show` prints a run (`--run N`, 1 = newest), `--errors` keeps only stderr, `--grep RE` filters lines, `--limit N`, `--json` |
 | `fleet history --problems` | the digest: what actually went wrong, deduped — the installer's own `WARNING:`/`ERROR:` lines first, then non-benign stderr with repeats collapsed (`37× sudo: a password is required`). With no host it reports the NEWEST run of every host, so one command answers "what is broken across the fleet" |
@@ -53,6 +54,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
 | `internal/histindex` | read past captures (pure but for the file open): `Scan` decodes `<UTC>__<host>.log` positionally, `Read` splits header/body/footer and decodes the `!! ` mark, `Summarize` adds finished + warning count |
 | `cmd/tui_history.go` | the dashboard's history view: `historyRuns` (scoped loader), the load/open Cmds and msgs, the run-keyed cursor, and `logEntries` -- the single accessor that swaps the panes between the live stream and a stored capture |
+| `internal/herdrmach` | herdr saved machines (pure but for `List`, via a one-method `Runner`): `Parse` (`herdr machine list --json`; non-array → error), `Saved` (match on target, not label), `AddArgv`. Shared by `fleet herdr sync` and the tui `S` key |
 | `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
 | `cmd/answers_store.go` | the non-secret prompt preferences on disk (`0600`); the on-disk type has no credential field |
 | `internal/runner` | the **only** seam that touches a remote host (`Exec` real, `Fake` for tests); `RunStreamCtx` is the deadline-aware path |
