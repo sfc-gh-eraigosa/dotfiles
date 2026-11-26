@@ -49,6 +49,13 @@ cat > "$H/bin/pgrep" <<'STUB'
 #!/bin/sh
 [ "${ITERM_RUNNING:-0}" = "1" ]
 STUB
+# mdls answers the PostScript-name lookup the way `mdls -raw` does for an
+# array attribute, with $FAKE_PS_NAME; unset, it prints "(null)" like a face
+# Spotlight has not indexed yet.
+cat > "$H/bin/mdls" <<'STUB'
+#!/bin/sh
+if [ -n "${FAKE_PS_NAME:-}" ]; then printf '(\n    "%s"\n)' "$FAKE_PS_NAME"; else printf '(null)'; fi
+STUB
 cat > "$H/bin/curl" <<'STUB'
 #!/bin/sh
 printf '%s\n' "$*" >> "$CURL_LOG"
@@ -163,6 +170,28 @@ run ITERM2_APP="$H/iTerm.app"
 assert_absent "unknown parent: no parent line" "$DYN" "Parent Name"
 if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$DYN" 2>/dev/null || /usr/bin/python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$DYN"; then
   ok "profile is valid JSON"; else notok "profile is valid JSON"; fi
+
+# --- font + glyphs: iTerm2 needs the PostScript name, one font for everything --
+run FAKE_PS_NAME=MesloLGSNF-Custom
+assert_contains "font: PostScript name read from the installed face" "$DYN" '"Normal Font": "MesloLGSNF-Custom 13",'
+assert_absent "font: never the family name (iTerm2 ignores it)" "$DYN" '"MesloLGS Nerd Font 13"'
+run
+assert_contains "font: unindexed face falls back to the known name" "$DYN" '"Normal Font": "MesloLGSNF-Regular 13",'
+assert_contains "glyphs: no separate non-ASCII font" "$DYN" '"Use Non-ASCII Font": false,'
+assert_contains "glyphs: anti-aliased" "$DYN" '"ASCII Anti Aliased": true,'
+assert_contains "glyphs: built-in Powerline glyphs on" "$DYN" '"Draw Powerline Glyphs": true'
+assert_absent "glyphs: never the old non-ASCII setting" "$DYN" '"Use Non-ASCII Font": true'
+
+# --- colours: a bright palette by default, the parent's with the opt-out ------
+assert_contains "palette: sets the background" "$DYN" '"Background Color": {"Color Space": "sRGB", "Red Component": 0.1059, "Green Component": 0.1137, "Blue Component": 0.1686, "Alpha Component": 1},'
+assert_contains "palette: bright red is saturated" "$DYN" '"Ansi 1 Color": {"Color Space": "sRGB", "Red Component": 1.0000,'
+if [ "$(grep -c '"Ansi [0-9]* Color"' "$DYN")" = "16" ]; then ok "palette: all 16 ANSI colours"
+else notok "palette: all 16 ANSI colours (got: $(grep -c '"Ansi [0-9]* Color"' "$DYN"))"; fi
+run GSL_ITERM2_COLORS=0
+assert_absent "palette opt-out: no colours written" "$DYN" "Color"
+assert_contains "palette opt-out: font still set" "$DYN" '"Use Non-ASCII Font": false,'
+if /usr/bin/python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$DYN" 2>/dev/null || python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$DYN"; then
+  ok "palette opt-out: profile is valid JSON"; else notok "palette opt-out: profile is valid JSON"; fi
 
 echo "----"
 echo "install_nerd_font_macos_test: $pass passed, $fail failed"

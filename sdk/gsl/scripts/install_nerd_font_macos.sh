@@ -101,7 +101,8 @@ GSL_GUID="gsl-nerd-font"
 # profile, whose font (often an old "...for Powerline" Meslo) has the powerline
 # arrows but none of the Nerd Font icons gsl draws, so they render as boxes.
 # When iTerm2 is installed, the gsl profile inherits the current default
-# profile (colors, keys, everything but the font) and becomes the default.
+# profile (keys and everything else it does not set: font, glyph settings and,
+# unless GSL_ITERM2_COLORS=0, colours) and becomes the default.
 iterm2_default_guid() {
   defaults read "$ITERM2_DOMAIN" "Default Bookmark Guid" 2>/dev/null || true
 }
@@ -131,9 +132,64 @@ if [ -d "$ITERM2_APP" ]; then
   fi
 fi
 
+# iTerm2 wants a font's PostScript name in "Normal Font", not its family name:
+# given "MesloLGS Nerd Font 13" it silently falls back to its own default font
+# (and size), so the Nerd Font icons gsl draws render as boxed "?". Read the
+# name from the installed face; Spotlight may not have indexed a face copied a
+# moment ago (or the font lives elsewhere), so fall back to the known name.
+FONT_PS_FALLBACK="MesloLGSNF-Regular"
+font_postscript_name() { # $1 = .ttf path; prints its PostScript name or nothing
+  [ -f "$1" ] && command -v mdls >/dev/null 2>&1 || return 0
+  mdls -raw -name com_apple_ats_name_postscript "$1" 2>/dev/null |
+    sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+}
+FONT_PS="$(font_postscript_name "$_regular")"
+FONT_PS="${FONT_PS:-$FONT_PS_FALLBACK}"
+
+# A bright palette (dark background, saturated ANSI colours) so gsl's segments
+# and everyday CLI output stand out; it overrides the colours of the inherited
+# parent profile. GSL_ITERM2_COLORS=0 leaves the parent's colours alone.
+# One "iTerm2 key|hex" per line.
+GSL_ITERM2_PALETTE='Background Color|1b1d2b
+Foreground Color|e6e6f0
+Bold Color|ffffff
+Cursor Color|ffd75e
+Cursor Text Color|1b1d2b
+Selection Color|3d4466
+Selected Text Color|ffffff
+Ansi 0 Color|3b3f51
+Ansi 1 Color|ff5c72
+Ansi 2 Color|5ef08a
+Ansi 3 Color|ffd75e
+Ansi 4 Color|5caeff
+Ansi 5 Color|d97cff
+Ansi 6 Color|4fe6e6
+Ansi 7 Color|d8dae6
+Ansi 8 Color|6b7089
+Ansi 9 Color|ff8095
+Ansi 10 Color|8bffae
+Ansi 11 Color|ffe58a
+Ansi 12 Color|8cc8ff
+Ansi 13 Color|e7a6ff
+Ansi 14 Color|8cf5f5
+Ansi 15 Color|ffffff'
+palette_json() { # prints one iTerm2 colour entry per palette line, each ending in ","
+  printf '%s\n' "$GSL_ITERM2_PALETTE" | awk -F'|' '
+    function hex2(s,   d) { d = "0123456789abcdef"
+      return (index(d, substr(s, 1, 1)) - 1) * 16 + index(d, substr(s, 2, 1)) - 1 }
+    NF == 2 { h = tolower($2)
+      printf "      \"%s\": {\"Color Space\": \"sRGB\", \"Red Component\": %.4f, \"Green Component\": %.4f, \"Blue Component\": %.4f, \"Alpha Component\": 1},\n",
+        $1, hex2(substr(h, 1, 2)) / 255, hex2(substr(h, 3, 2)) / 255, hex2(substr(h, 5, 2)) / 255 }'
+}
+palette_lines=""
+[ "${GSL_ITERM2_COLORS:-1}" = "0" ] || palette_lines="$(palette_json)"
+
 mkdir -p "$dyn_dir"
 parent_line=""
 [ -n "$parent" ] && parent_line="\"Dynamic Profile Parent Name\": \"${parent}\","
+# Every glyph is drawn from the Nerd Font: no separate non-ASCII font (iTerm2
+# would draw gsl's private-use icons with it, e.g. Menlo, which has none), and
+# iTerm2 draws the powerline separators itself so they meet the cell edges.
 cat > "$dyn_file" <<JSON
 {
   "Profiles": [
@@ -141,14 +197,19 @@ cat > "$dyn_file" <<JSON
       "Name": "gsl Nerd Font",
       "Guid": "${GSL_GUID}",
       ${parent_line}
-      "Normal Font": "${FONT_FAMILY} ${FONT_SIZE}",
-      "Non Ascii Font": "${FONT_FAMILY} ${FONT_SIZE}",
-      "Use Non-ASCII Font": true
+${palette_lines}
+      "Normal Font": "${FONT_PS} ${FONT_SIZE}",
+      "Non Ascii Font": "${FONT_PS} ${FONT_SIZE}",
+      "Use Non-ASCII Font": false,
+      "ASCII Anti Aliased": true,
+      "Draw Powerline Glyphs": true
     }
   ]
 }
 JSON
-echo "Wrote iTerm2 Dynamic Profile: ${dyn_file}${parent:+ (inherits '${parent}')}"
+inherits=""
+[ -n "$parent" ] && inherits=" (inherits '${parent}')"
+echo "Wrote iTerm2 Dynamic Profile: ${dyn_file} (font ${FONT_PS} ${FONT_SIZE})${inherits}"
 
 if [ ! -d "$ITERM2_APP" ]; then
   echo "  iTerm2 not installed; the profile is ready if you install it."
