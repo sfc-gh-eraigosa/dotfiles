@@ -11,6 +11,17 @@
 #   per-plugin `claude:` / `antigravity:` blocks are optional; a missing block
 #   means that tool is skipped for that row.
 #
+#   Per host, every row is also a gff flag, on by default (features.yaml,
+#   area `ai`): `ai.plugin.<name>` false disables the plugin on this host
+#   (`claude plugin disable`; nothing is uninstalled), and each server under
+#   `mcp:` is `ai.mcp.<name>.<server>`, which false denies through
+#   `deniedMcpServers` in ~/.claude/settings.json while the rest of the
+#   plugin stays on. `ai.connectors.claude-ai` false turns off the claude.ai
+#   connectors (Gmail, Drive, Slack…). Turning a flag back on undoes only
+#   what sync-plugins wrote. Rows with `claude.synced: true` come from the
+#   claude.ai account (`<name>@synced`): sync-plugins never installs or
+#   updates them, it only enables or disables them.
+#
 #   antigravity sources are git repos passed to `agy plugin install`. Legacy
 #   Gemini CLI extensions remain compatible (agy imports/installs them; see
 #   also `agy plugin import gemini` for one-off migrations of a live host).
@@ -34,6 +45,7 @@ plugins:
   - name: github
     enabled: true
     claude: { plugin: github@claude-plugins-official }
+    mcp: [github]
     antigravity: { source: https://github.com/gemini-cli-extensions/conductor }
   - name: code-review
     enabled: true
@@ -60,12 +72,15 @@ plugins:
   - name: deploy-on-aws
     enabled: true
     claude: { plugin: deploy-on-aws@claude-plugins-official }
+    mcp: [awsiac, awspricing, awsknowledge]
   - name: aws-serverless
     enabled: true
     claude: { plugin: aws-serverless@claude-plugins-official }
+    mcp: [aws-serverless-mcp]
   - name: aws-core
     enabled: true
     claude: { plugin: aws-core@claude-plugins-official }
+    mcp: [aws-mcp]
   - name: mcp-apps
     enabled: true
     claude: { plugin: mcp-apps@claude-plugins-official }
@@ -75,3 +90,59 @@ plugins:
   - name: andrej-karpathy-skills
     enabled: true
     claude: { plugin: andrej-karpathy-skills@karpathy-skills }
+
+  # --- Synced from the claude.ai account (`<name>@synced`) ---------------
+  # Not installed by sync-plugins: listed so each one has its gff flag.
+  - name: pdf-viewer
+    enabled: true
+    claude: { plugin: pdf-viewer@synced, synced: true }
+    mcp: [pdf]
+  - name: browser-use
+    enabled: true
+    claude: { plugin: browser-use@synced, synced: true }
+    mcp: [browser-use]
+  - name: figma
+    enabled: true
+    claude: { plugin: figma@synced, synced: true }
+    mcp: [figma]
+  - name: grafana-cloud-mcp
+    enabled: true
+    claude: { plugin: grafana-cloud-mcp@synced, synced: true }
+    mcp: [grafana-cloud]
+  - name: zoom-plugin
+    enabled: true
+    claude: { plugin: zoom-plugin@synced, synced: true }
+    mcp: [zoom-mcp, zoom-docs-mcp, zoom-whiteboard-mcp]
+  - name: operations
+    enabled: true
+    claude: { plugin: operations@synced, synced: true }
+  - name: design
+    enabled: true
+    claude: { plugin: design@synced, synced: true }
+  - name: engineering
+    enabled: true
+    claude: { plugin: engineering@synced, synced: true }
+  - name: legal
+    enabled: true
+    claude: { plugin: legal@synced, synced: true }
+  - name: product-management
+    enabled: true
+    claude: { plugin: product-management@synced, synced: true }
+  - name: productivity
+    enabled: true
+    claude: { plugin: productivity@synced, synced: true }
+  - name: marketing
+    enabled: true
+    claude: { plugin: marketing@synced, synced: true }
+  - name: finance
+    enabled: true
+    claude: { plugin: finance@synced, synced: true }
+  - name: data
+    enabled: true
+    claude: { plugin: data@synced, synced: true }
+  - name: customer-support
+    enabled: true
+    claude: { plugin: customer-support@synced, synced: true }
+  - name: cowork-plugin-management
+    enabled: true
+    claude: { plugin: cowork-plugin-management@synced, synced: true }

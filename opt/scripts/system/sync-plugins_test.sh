@@ -4,6 +4,12 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYNC="${SCRIPT_DIR}/sync-plugins.sh"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+MANIFEST="${REPO_ROOT}/ai/plugins.yaml"
+FEATURES="${REPO_ROOT}/.github/gff/features.yaml"
+# Hermetic: never read this machine's own gff overrides; each case sets the
+# GFF_* values it needs, as install.sh's export would.
+export SYNC_PLUGINS_GFF_EXPORT=0
 
 PASS=0
 FAIL=0
@@ -45,7 +51,11 @@ INSTALL_COUNT="$(printf '%s' "$OUT" | grep -c 'DRY-RUN: claude plugin install ')
 assert_eq "$INSTALL_COUNT" "13" "plans install for all 13 plugins"
 
 ENABLE_COUNT="$(printf '%s' "$OUT" | grep -c 'DRY-RUN: claude plugin enable ')"
-assert_eq "$ENABLE_COUNT" "13" "plans enable for all 13 plugins"
+assert_eq "$ENABLE_COUNT" "29" "plans enable for all 29 plugins (13 installed + 16 synced)"
+assert_contains "$OUT" "DRY-RUN: claude plugin enable pdf-viewer@synced" "enables a synced plugin whose flag is on"
+assert_not_contains "$OUT" "plugin install pdf-viewer@synced" "never installs a synced plugin"
+assert_not_contains "$OUT" "plugin update pdf-viewer@synced" "never updates a synced plugin"
+assert_not_contains "$OUT" "claude plugin disable" "disables nothing while every flag is on"
 
 AGY_COUNT="$(printf '%s' "$OUT" | grep -c 'DRY-RUN: agy plugin install ')"
 assert_eq "$AGY_COUNT" "7" "plans install for all 7 antigravity plugin sources"
@@ -231,7 +241,9 @@ for _t in bash sh env yq grep egrep awk sed tr cat head cut sort uniq dirname ba
     _src="$(command -v "$_t" 2>/dev/null)" && ln -s "$_src" "$NOUVX_BIN/$_t" 2>/dev/null
 done
 NOUVXOUT="$(PATH="$NOUVX_BIN" bash "$SYNC" --dry-run 2>&1)"
+NOUVXOFF="$(GFF_AI_PLUGIN_DEPLOY_ON_AWS=false GFF_AI_PLUGIN_AWS_SERVERLESS=false GFF_AI_PLUGIN_AWS_CORE=false PATH="$NOUVX_BIN" bash "$SYNC" --dry-run 2>&1)"
 rm -rf "$NOUVX_BIN"
+assert_not_contains "$NOUVXOFF" "uvx is not on PATH" "no uvx warning when this host's flags turn the AWS plugins off"
 assert_contains "$NOUVXOUT" "uvx is not on PATH" "warns when uvx is missing and an AWS (uvx-dependent) plugin is enabled"
 UVX_WARNING="$(printf '%s\n' "$NOUVXOUT" | grep "uvx is not on PATH")"
 assert_contains "$UVX_WARNING" "deploy-on-aws" "warning names deploy-on-aws"
@@ -320,6 +332,75 @@ assert_not_contains "$(cat "$LOCKERR")" "retrying (attempt" "…on stdout, never
 assert_contains "$(cat "$LOCKERR")" "WARNING — 'claude plugin update aws-serverless@claude-plugins-official' still hit a git index.lock" "the exhausted-budget warning is on stderr"
 rm -f "$LOCKERR"
 rm -rf "$COUNT_DIR"
+
+# --- gff flags: one per plugin and per MCP server, all on by default ----------
+flag_default() { awk -v want="$1" '$2 == "path:" { k = $3 } k == want && $1 == "boolDefault:" { print $2; exit }' "$FEATURES"; }
+MISSING=""
+while IFS= read -r n; do
+    [ "$(flag_default "ai.plugin.$n")" = "true" ] || MISSING="$MISSING ai.plugin.$n"
+done < <(yq -r '.plugins[] | select(.claude.plugin != null) | .name' "$MANIFEST")
+while IFS= read -r m; do
+    [ "$(flag_default "ai.mcp.$m")" = "true" ] || MISSING="$MISSING ai.mcp.$m"
+done < <(yq -r '.plugins[] | select(.claude.plugin != null) | .mcp[]?' "$MANIFEST")
+assert_eq "$MISSING" "" "every manifest plugin and MCP server has its gff flag, on by default"
+assert_eq "$(flag_default ai.connectors.claude-ai)" "true" "ai.connectors.claude-ai is declared, on by default"
+assert_eq "$(yq -r '.plugins[].mcp[]?' "$MANIFEST" | sort | uniq -d)" "" "MCP server names are unique across the manifest (they name the flag)"
+
+# --- A plugin flag set false disables the plugin and skips install/update -----
+OFF="$(GFF_AI_PLUGIN_AWS_CORE=false GFF_AI_PLUGIN_PDF_VIEWER=false bash "$SYNC" --dry-run 2>&1)"
+assert_contains "$OFF" "DRY-RUN: claude plugin disable aws-core@claude-plugins-official" "a false plugin flag disables the plugin"
+assert_not_contains "$OFF" "plugin install aws-core@claude-plugins-official" "…and skips its install"
+assert_not_contains "$OFF" "plugin update aws-core@claude-plugins-official" "…and skips its update"
+assert_not_contains "$OFF" "plugin enable aws-core@claude-plugins-official" "…and never enables it"
+assert_contains "$OFF" "DRY-RUN: claude plugin disable pdf-viewer@synced" "a false flag disables a synced plugin"
+assert_contains "$OFF" "DRY-RUN: claude plugin install superpowers@claude-plugins-official" "other plugins are untouched"
+
+# --- MCP server and connector flags: deniedMcpServers / disableClaudeAiConnectors
+MCP_ROOT="$(mktemp -d)"
+PLUG="$MCP_ROOT/plugins"
+mkdir -p "$PLUG/cache/claude-plugins-official/aws-core/1.1.0" "$PLUG/synced/acct/pdf-viewer~g2" "$PLUG/synced/acct/browser-use"
+cat > "$PLUG/cache/claude-plugins-official/aws-core/1.1.0/.mcp.json" <<'EOF'
+{"mcpServers":{"aws-mcp":{"command":"uvx","args":["mcp-proxy-for-aws@1.6.4","https://aws-mcp.us-east-1.api.aws/mcp"]}}}
+EOF
+cat > "$PLUG/synced/acct/pdf-viewer~g2/.mcp.json" <<'EOF'
+{"pdf":{"command":"npx","args":["-y","@modelcontextprotocol/server-pdf","--stdio"]}}
+EOF
+cat > "$PLUG/synced/acct/browser-use/.mcp.json" <<'EOF'
+{"mcpServers":{"other":{"command":"x"}}}
+EOF
+jq -n --arg p "$PLUG/cache/claude-plugins-official/aws-core/1.1.0" \
+    '{version:2, plugins:{"aws-core@claude-plugins-official":[{scope:"user", installPath:$p}]}}' > "$PLUG/installed_plugins.json"
+SETTINGS="$MCP_ROOT/settings.json"
+echo '{"model":"x","deniedMcpServers":[{"serverName":"mine"}]}' > "$SETTINGS"
+MCP_FAKE="$(mktemp -d)"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$MCP_FAKE/claude"; cp "$MCP_FAKE/claude" "$MCP_FAKE/agy"; chmod +x "$MCP_FAKE/claude" "$MCP_FAKE/agy"
+mcp_run() { CLAUDE_PLUGINS_DIR="$PLUG" CLAUDE_SETTINGS_FILE="$SETTINGS" SYNC_PLUGINS_STATE_DIR="$MCP_ROOT/state" \
+    PATH="$MCP_FAKE:$PATH" bash "$SYNC" "$@" 2>&1; }
+
+DRYOFF="$(GFF_AI_MCP_AWS_MCP=false mcp_run --dry-run)"
+assert_contains "$DRYOFF" "DRY-RUN: deny MCP server aws-mcp" "dry-run prints the planned denial"
+assert_eq "$(jq -c '.deniedMcpServers' "$SETTINGS")" '[{"serverName":"mine"}]' "dry-run leaves settings.json alone"
+
+MCPOUT="$(GFF_AI_MCP_AWS_MCP=false GFF_AI_MCP_PDF=false GFF_AI_MCP_BROWSER_USE=false GFF_AI_CONNECTORS_CLAUDE_AI=false mcp_run)"
+assert_eq "$(jq -c '.deniedMcpServers' "$SETTINGS")" \
+    '[{"serverName":"mine"},{"serverCommand":["uvx","mcp-proxy-for-aws@1.6.4","https://aws-mcp.us-east-1.api.aws/mcp"]},{"serverCommand":["npx","-y","@modelcontextprotocol/server-pdf","--stdio"]}]' \
+    "false MCP flags deny each server by its own command, keeping the user's entries"
+assert_eq "$(jq -r '.disableClaudeAiConnectors' "$SETTINGS")" "true" "ai.connectors.claude-ai false disables the claude.ai connectors"
+assert_eq "$(jq -r '.model' "$SETTINGS")" "x" "other settings are kept"
+assert_contains "$MCPOUT" "browser-use" "a server missing from its plugin's config is named…"
+assert_contains "$MCPOUT" "not denied" "…as not denied"
+GFF_AI_MCP_AWS_MCP=false GFF_AI_MCP_PDF=false GFF_AI_MCP_BROWSER_USE=false GFF_AI_CONNECTORS_CLAUDE_AI=false mcp_run >/dev/null
+assert_eq "$(jq '.deniedMcpServers | length' "$SETTINGS")" "3" "a re-run adds no duplicates"
+
+mcp_run >/dev/null
+assert_eq "$(jq -c '.deniedMcpServers' "$SETTINGS")" '[{"serverName":"mine"}]' "flags back on remove only what sync-plugins added"
+assert_eq "$(jq -r 'has("disableClaudeAiConnectors")' "$SETTINGS")" "false" "…and the connectors switch it set"
+
+echo '{"disableClaudeAiConnectors":true}' > "$SETTINGS"
+rm -rf "$MCP_ROOT/state"
+mcp_run >/dev/null
+assert_eq "$(jq -c . "$SETTINGS")" '{"disableClaudeAiConnectors":true}' "a connectors switch the user set by hand is never removed"
+rm -rf "$MCP_ROOT" "$MCP_FAKE"
 
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
