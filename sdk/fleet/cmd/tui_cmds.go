@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/herdrmach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
@@ -804,38 +804,40 @@ func herdrShell(bin, alias string) tea.Cmd {
 // alias (fleet-herdr-machines UC1). This is the inside-herdr twin of
 // herdrAttachArgv: a nested client is refused, a saved machine is not.
 func herdrMachineAddArgv(bin, alias string) []string {
-	return []string{bin, "machine", "add", alias, "--label", alias}
+	argv := herdrmach.AddArgv(alias)
+	argv[0] = bin
+	return argv
 }
 
 // savedHerdrTargets parses `herdr machine list --json` into the set of ssh
 // targets already saved. Targets, not labels: the operator may rename a
 // label, the target is what fleet knows the host by.
 func savedHerdrTargets(js string) (map[string]bool, error) {
-	var rows []struct {
-		Target string `json:"target"`
-	}
-	if err := json.Unmarshal([]byte(js), &rows); err != nil {
+	ms, err := herdrmach.Parse([]byte(js))
+	if err != nil {
 		return nil, fmt.Errorf("unreadable output: %w", err)
 	}
-	out := map[string]bool{}
-	for _, r := range rows {
-		if r.Target != "" {
-			out[r.Target] = true
-		}
+	return savedTargetSet(ms), nil
+}
+
+// savedTargetSet indexes machines by target, keyed exactly as
+// herdrmach.Saved matches, so the tui and `fleet herdr sync` agree.
+func savedTargetSet(ms []herdrmach.Machine) map[string]bool {
+	out := make(map[string]bool, len(ms))
+	for _, m := range ms {
+		out[m.Target] = true
 	}
-	return out, nil
+	return out
 }
 
 // listHerdrMachines is the production herdrMachines: a bounded local call,
 // since it runs on the keystroke.
 func listHerdrMachines(bin string) (map[string]bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	out, err := runLocal(ctx, bin, "machine", "list", "--json")
+	ms, err := listSavedMachines(bin)
 	if err != nil {
 		return nil, err
 	}
-	return savedHerdrTargets(out)
+	return savedTargetSet(ms), nil
 }
 
 // machineAddDone is what the machine-add handoff reports back. herdr's own
