@@ -38,9 +38,9 @@ the ledger is a claim, the command is the proof.
 
 | PR | Tasks | Worker | Base |
 | :-- | :-- | :-- | :-- |
-| 1 save/push (#452) | docs, T1, T2, T3, T4, T5, T6, T7, T9, T10 | `fleet-vault-keys/${USER}/design` | `main` |
-| 2 pull | T11 | `fleet-vault-keys/${USER}/pull` (create at T11 start) | PR 1's branch |
-| 3 rest | T8, T12, T13, T14, T15, T16 | `fleet-vault-keys/${USER}/lifecycle` (create at T8 start) | PR 2's branch |
+| 1 save/push (#452, **merged** 90d1ed1) | docs, T1, T2, T3, T4, T5, T6, T7, T9, T10 | `fleet-vault-keys/${USER}/design` (removed) | `main` |
+| 2 pull (#457, **merged** into #452) | T11 | `fleet-vault-keys/${USER}/pull` (removed) | PR 1's branch |
+| 3 rest | T8, T12, T13, T14, T15, T16 | `fleet-vault-keys/${USER}/lifecycle` (exists; rebased 2026-11-15) | `main` |
 | 4 1Password | T3 (built: local branch `fleet-vault-keys-op-adapter-saved` @ 953dca5, reviewed) + its live test G1 | `fleet-vault-keys/${USER}/op` (create after PR 3, once the operator has a 1Password account) | PR 3's branch |
 
 Record each new worker's `gss feature worker add --json` output verbatim below when created.
@@ -122,14 +122,28 @@ If a checkpoint rebase fails on signing, rebase manually with
 > Replace it at session end (past prompts are in `git log -- <this file>`).
 
 ```text
-Execute the fleet-vault-keys plan on gss worker fleet-vault-keys/${USER}/design (PR #452, issue #451).
-Read first: docs/mbo/plans/fleet-vault-keys.md, its spec + design, then this folder's
-IMPLEMENTATION.md, TRACKING.md, TODO.md. Start at the first unchecked TODO box.
-Scope, in order: Task 0 (vendor spike — STOP and ask the operator to sign in to op and lpass,
-then record transcripts), Tasks 1–2 (vault contract, payload, roster), 3–4 (adapters, using the
-spike-confirmed argv), 5–7 (config/gate, keystore, agent), 8–15 (pre-flight, verbs, TUI), 16 (docs + live gates).
-TDD every task; tee evidence; update TRACKING after each task.
-Stop and ask the operator: before every commit/checkpoint, for Task 0 sign-in, and for each live gate G1–G6.
-Blocked → TRACKING §4 with the real output, then continue with the next independent task.
-Done when TRACKING §3 is fully ticked.
+Continue the fleet-vault-keys build (issue #451) with PR 3 on gss worker
+fleet-vault-keys/${USER}/lifecycle (worktree
+$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/fleet-vault-keys/${USER}/lifecycle,
+branch based on main). PR 1 #452 and PR 2 #457 are MERGED (main 90d1ed1+): vault setup/status/push/pull ship.
+Read first, in the worktree: docs/mbo/plans/fleet-vault-keys/TRACKING.md (§0 stack, §1 ledger, §6 rulings +
+deferred review findings), TODO.md (first unchecked box = next action), this file, then plan Tasks 8 and 12–16.
+State: the branch is main + T8 ("stop before dialling when the key is locked") + this handoff docs commit; T8 is
+built but UNREVIEWED; nothing is pushed and there is no PR 3 yet. Before anything:
+`git fetch && git -c commit.gpgsign=false rebase origin/main`, then `cd sdk/fleet && go test ./...`
+(expect only the 3 known failures in §5).
+Next, in order:
+ 1. T8 fix: existing status/update/keys-sync/tui tests now reach the real ~/.ssh + ssh-agent via keyLocked — stub it
+    (test-isolation rule). Then task review of T8; fix loop until clean.
+ 2. T12 keys unlock, T13 runner probe + keys rotate, T14 roster-aware sync/prune (wire vaultActive), T15 TUI V,
+    T16 docs + live gates — subagent-driven, TDD, one task review each (opus for security-heavy work).
+ 3. After T12/T13 land, re-point the push/pull hints and the features.yaml description at `keys unlock`/`rotate` (§6).
+ 4. Final whole-branch review on the most capable model, seeded with TRACKING §6's deferred list.
+Rules: local unsigned commits (`git -c commit.gpgsign=false commit`, stage by name) are pre-authorized; ask
+(AskUserQuestion) before every checkpoint/push/PR/`pr --ready`. The SDD ledger is git-ignored scratch and is lost
+when a worktree is removed — keep TRACKING.md current after every task. Use $HOME/${USER}, never literal
+paths/usernames; no secret literals. Live vault writes and live gates G1–G6 only with the operator.
+PR 4 (1Password live gate) waits for a 1Password account.
+Operator side-quest pending: the first live capture — `gff set fleet.vault.enabled true`, `fleet vault setup`,
+`fleet vault push` on the trusted node (`--encrypt-local` only after `keys unlock` exists).
 ```

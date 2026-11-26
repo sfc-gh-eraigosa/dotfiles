@@ -24,6 +24,9 @@ var tuiCmd = &cobra.Command{
 	Use:   "tui",
 	Short: "Interactive host list: vim navigation, search, selection, concurrent updates",
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		if err := preflight(cmd.Context()); err != nil {
+			return err
+		}
 		// Both flags reach a remote shell / bound concurrency, so they are
 		// validated before a single host is contacted. An UNSET --update-ref
 		// (the default) means "don't touch the plan's own branch" — it is
