@@ -53,6 +53,28 @@ func TestWarnFilterFoldsTheGcloudNagInACapture(t *testing.T) {
 	}
 }
 
+// TestSkippedStepOutcomeCountsAsAWarning pins the other half of updexec's
+// noteOutcome: the "fleet: step <id> skipped: <reason>" line it writes must
+// be counted, or a host whose sync was skipped on a dirty clone still reads
+// as a clean, finished run in `fleet history`.
+func TestSkippedStepOutcomeCountsAsAWarning(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20261126T055136Z__nano.log",
+		"# fleet update — host=nano\n"+
+			"05:51:36   === step playground.sync (sync) ===\n"+
+			"05:51:36   state=dirty branch=main\n"+
+			"05:51:36 !! fleet: step playground.sync skipped: clone is dirty; re-run with --force to preserve local work in a rescue worktree\n"+
+			"# 2026-11-26T05:51:37Z finished\n")
+
+	c, err := Read(filepath.Join(dir, "20261126T055136Z__nano.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Warnings != 1 {
+		t.Errorf("Warnings = %d, want 1 — a skipped step must badge the run", c.Warnings)
+	}
+}
+
 // TestWarnFilterKeepsPerHostState pins that giving each host its own
 // WarnFilter is what makes interleaving safe: a second host's lines landing
 // between an advisory's continuation lines must not break the fold, because

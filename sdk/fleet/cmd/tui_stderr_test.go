@@ -89,14 +89,30 @@ func TestStderrReachesBothPanesAndTheBadge(t *testing.T) {
 		t.Fatalf("every non-benign stderr line is a warning: warns=%d errEntries=%d",
 			m.warns["h1"], len(errs))
 	}
+	// The Fake's output is not a valid sync precheck, so dotfiles.sync FAILS
+	// and fleet reports that outcome on stderr ("fleet: step dotfiles.sync
+	// failed: ..."), exactly once: the step it blocks is a dependency-failed
+	// cascade and stays off the badge.
+	outcomes := 0
 	for _, e := range errs {
+		if strings.HasPrefix(e.line, "fleet: step ") {
+			outcomes++
+			if !strings.HasPrefix(e.line, "fleet: step dotfiles.sync failed") {
+				t.Fatalf("only the failed sync may report an outcome, got %q", e.line)
+			}
+			continue
+		}
 		if !strings.Contains(e.line, "apt-get") {
 			t.Fatalf("the error projection must hold only the stderr line, got %q", e.line)
 		}
 	}
-	if len(m.logs) != 2*len(errs) {
-		t.Fatalf("the log pane keeps BOTH streams (one stdout per stderr here), got %d for %d",
-			len(m.logs), len(errs))
+	if outcomes != 1 {
+		t.Fatalf("want exactly one outcome line (the failed sync), got %d", outcomes)
+	}
+	remote := len(errs) - outcomes
+	if len(m.logs) != 2*remote+outcomes {
+		t.Fatalf("the log pane keeps BOTH streams (one stdout per remote stderr, plus the outcome), got %d for %d remote + %d outcome",
+			len(m.logs), remote, outcomes)
 	}
 	v := m.View()
 	if !strings.Contains(v, "installing") || !strings.Contains(v, "apt-get") {
