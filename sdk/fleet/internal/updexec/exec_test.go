@@ -545,6 +545,29 @@ func TestUpdateSkipsDirtyCloneByDefault(t *testing.T) {
 	}
 }
 
+// TestSkippedStepIsNamedInTheCapture: a dirty-clone skip used to leave only
+// "state=dirty branch=main" in the run log, so `fleet history` showed the run
+// as finished with no warnings. The outcome must now be a stderr line that
+// names the step and the reason; an OK run must not gain one.
+func TestSkippedStepIsNamedInTheCapture(t *testing.T) {
+	io := newFakeIO().on("git rev-parse --git-dir", "state=dirty branch=main", nil)
+	out := newRecordingOutput()
+	Executor{IO: io, Out: out}.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	want := StderrMark + "fleet: step dotfiles.sync skipped: " + reasonDirtySkip
+	if !strings.Contains(out.text("alpha"), want) {
+		t.Fatalf("capture must name the skipped step.\nwant line: %q\ngot:\n%s", want, out.text("alpha"))
+	}
+
+	clean := newFakeIO().
+		on("git rev-parse --git-dir", cleanPrecheck, nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main", nil)
+	okOut := newRecordingOutput()
+	Executor{IO: clean, Out: okOut}.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	if strings.Contains(okOut.text("alpha"), "fleet: step ") {
+		t.Fatalf("an OK step must not write an outcome line:\n%s", okOut.text("alpha"))
+	}
+}
+
 func TestUpdateProceedsOnCleanClone(t *testing.T) {
 	io := newFakeIO().
 		on("git rev-parse --git-dir", cleanPrecheck, nil).

@@ -511,6 +511,7 @@ func (e Executor) RunHostCtx(ctx context.Context, host string, p updplan.Plan) H
 			res := Result{Step: st.ID, Kind: st.Kind, Status: DepFailed, Reason: "blocked by " + blocker}
 			status[st.ID] = res.Status
 			rep.Results = append(rep.Results, res)
+			noteOutcome(w, res)
 			e.fireDueRestores(w, host, p, pending, st.ID, &rep)
 			continue
 		}
@@ -523,6 +524,7 @@ func (e Executor) RunHostCtx(ctx context.Context, host string, p updplan.Plan) H
 		}
 		status[st.ID] = res.Status
 		rep.Results = append(rep.Results, res)
+		noteOutcome(w, res)
 
 		if st.Kind == updplan.KindSync {
 			e.armAndMaybeRestoreNow(w, host, p, st, res, pending, &rep)
@@ -539,6 +541,26 @@ func (e Executor) RunHostCtx(ctx context.Context, host string, p updplan.Plan) H
 	}
 	w.Close("finished")
 	return rep
+}
+
+// noteOutcome writes a skipped, failed or dependency-failed step's outcome
+// into the capture as a stderr line, so the run log says what happened and
+// `fleet history` / the TUI badge count it as a warning. Without it a sync
+// skipped on a dirty clone left only "state=dirty branch=main" in the log:
+// every later step was silently absent, and the run read as finished with
+// no warnings. OK and Cancelled steps write nothing (a cancel already
+// changes the capture's footer).
+func noteOutcome(w LineWriter, res Result) {
+	switch res.Status {
+	case Skipped, Failed, DepFailed:
+	default:
+		return
+	}
+	line := fmt.Sprintf("fleet: step %s %s", res.Step, res.Status)
+	if res.Reason != "" {
+		line += ": " + res.Reason
+	}
+	w.Line(StderrMark + line)
 }
 
 // firstStopBlocker returns the id of the first need whose own status is not
