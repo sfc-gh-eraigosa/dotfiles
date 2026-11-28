@@ -94,13 +94,26 @@ assert_in_subshell "doctor prints the resolved binary line" \
     "export XDG_CONFIG_HOME=\$(mktemp -d); . '$ALIASES'; claude-config doctor 2>&1 | grep -q 'command claude ->'"
 # Exactly one claude on a controlled PATH: no warning, exit 0, resolves to it.
 assert_in_subshell "doctor: single binary => no warning, exit 0" \
-    "H=\$(mktemp -d); mkdir -p \"\$H/b1\"; : > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export PATH=\"\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; out=\$(claude-config doctor 2>&1); rc=\$?; [ \$rc -eq 0 ] && printf '%s' \"\$out\" | grep -q \"\$H/b1/claude\" && ! printf '%s' \"\$out\" | grep -q WARNING"
+    "H=\$(mktemp -d); mkdir -p \"\$H/b1\"; printf '#!/bin/sh\necho 9.9.9 Claude Code\n' > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export PATH=\"\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; out=\$(claude-config doctor 2>&1); rc=\$?; [ \$rc -eq 0 ] && printf '%s' \"\$out\" | grep -q \"\$H/b1/claude\" && ! printf '%s' \"\$out\" | grep -q WARNING"
 # Two claude binaries on PATH: warns and returns non-zero.
 assert_in_subshell "doctor: multiple binaries => WARNING + nonzero" \
-    "H=\$(mktemp -d); mkdir -p \"\$H/b1\" \"\$H/b2\"; : > \"\$H/b1/claude\"; : > \"\$H/b2/claude\"; chmod +x \"\$H/b1/claude\" \"\$H/b2/claude\"; export PATH=\"\$H/b1:\$H/b2:/usr/bin:/bin\"; . '$ALIASES'; claude-config doctor >/dev/null 2>&1; [ \$? -ne 0 ]"
+    "H=\$(mktemp -d); mkdir -p \"\$H/b1\" \"\$H/b2\"; for b in b1 b2; do printf '#!/bin/sh\necho 9.9.9 Claude Code\n' > \"\$H/\$b/claude\"; chmod +x \"\$H/\$b/claude\"; done; export PATH=\"\$H/b1:\$H/b2:/usr/bin:/bin\"; . '$ALIASES'; out=\$(claude-config doctor 2>&1); rc=\$?; [ \$rc -ne 0 ] && printf '%s' \"\$out\" | grep -q 'more than one' && ! printf '%s' \"\$out\" | grep -q 'EMPTY'"
 # De-dups a binary that appears under repeated PATH entries (one logical claude).
 assert_in_subshell "doctor: dedups repeated PATH entries (no false warning)" \
-    "H=\$(mktemp -d); mkdir -p \"\$H/b1\"; : > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export PATH=\"\$H/b1:\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; claude-config doctor >/dev/null 2>&1; [ \$? -eq 0 ]"
+    "H=\$(mktemp -d); mkdir -p \"\$H/b1\"; printf '#!/bin/sh\necho 9.9.9 Claude Code\n' > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export PATH=\"\$H/b1:\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; claude-config doctor >/dev/null 2>&1; [ \$? -eq 0 ]"
+# Truncated install (0-byte binary — seen after a crash mid-`npm install`):
+# still executable, exits 0, prints nothing. doctor must flag it + exit non-zero.
+assert_in_subshell "doctor: empty (truncated) binary => WARNING + nonzero" \
+    "H=\$(mktemp -d); mkdir -p \"\$H/b1\"; : > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export PATH=\"\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; out=\$(claude-config doctor 2>&1); rc=\$?; [ \$rc -ne 0 ] && printf '%s' \"\$out\" | grep -q 'EMPTY file' && printf '%s' \"\$out\" | grep -q 'install -g --force'"
+# Symlink to an empty file (the npm layout: bin/claude -> .../claude.exe) is caught too.
+assert_in_subshell "doctor: symlink to an empty binary => WARNING + nonzero" \
+    "H=\$(mktemp -d); mkdir -p \"\$H/b1\" \"\$H/pkg\"; : > \"\$H/pkg/claude.exe\"; chmod +x \"\$H/pkg/claude.exe\"; ln -s \"\$H/pkg/claude.exe\" \"\$H/b1/claude\"; export PATH=\"\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; claude-config doctor 2>&1 | grep -q 'EMPTY file'"
+# Non-empty but prints no version => flagged as broken.
+assert_in_subshell "doctor: binary with no version output => WARNING + nonzero" \
+    "H=\$(mktemp -d); mkdir -p \"\$H/b1\"; printf '#!/bin/sh\nexit 0\n' > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export PATH=\"\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; out=\$(claude-config doctor 2>&1); rc=\$?; [ \$rc -ne 0 ] && printf '%s' \"\$out\" | grep -q 'no version'"
+# Output with a digit but no dotted version (e.g. an error "code 1") => broken.
+assert_in_subshell "doctor: non-version output with a digit => WARNING + nonzero" \
+    "H=\$(mktemp -d); mkdir -p \"\$H/b1\"; printf '#!/bin/sh\necho Error code 1\n' > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export PATH=\"\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; claude-config doctor 2>&1 | grep -q 'no version'"
 # Cross-shell regression: zsh does not word-split unquoted variables, so a
 # 'for d in \$PATH' scan sees PATH as ONE word and doctor reports <not found>
 # in the user's login shell. Skips (passes) when zsh is not installed.

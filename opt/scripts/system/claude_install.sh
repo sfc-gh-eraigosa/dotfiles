@@ -54,6 +54,16 @@ install_via_brew() {
     if brew list --cask claude-code &> /dev/null; then
         echo "claude-code cask already installed. Checking for updates..."
         brew upgrade --cask claude-code 2>/dev/null || true
+        # `brew upgrade` is a no-op when current, so repair a truncated binary.
+        local bp; bp="$(brew --prefix 2>/dev/null)/bin/claude"
+        if { [ -e "$bp" ] || [ -L "$bp" ]; } && ! claude_binary_healthy "$bp"; then
+            echo "WARNING: $bp is broken (empty, dangling link, or no version output). Reinstalling the cask..."
+            brew reinstall --cask claude-code || true
+            if ! claude_binary_healthy "$bp"; then
+                echo "ERROR: $bp is still broken after 'brew reinstall --cask claude-code'."
+                return 1
+            fi
+        fi
     else
         echo "Installing claude-code cask..."
         brew install --cask claude-code || {
@@ -93,6 +103,43 @@ install_via_npm() {
     else
         echo "Installing $NPM_PKG globally via npm..."
         npm install -g "$NPM_PKG"
+    fi
+
+    # `npm ls` only reads package metadata, and `npm update` is a no-op when
+    # the version is current — so a truncated install (every file 0 bytes,
+    # left by a crash/`wsl --shutdown` before the writes were flushed) would
+    # survive every re-run. Check the binary itself and force a reinstall.
+    local prefix; prefix="$(npm config get prefix 2>/dev/null || true)"
+    local bin="$prefix/bin/claude"
+    # -L too: a crash can leave bin/claude dangling (claude.exe never written).
+    if [ -n "$prefix" ] && { [ -e "$bin" ] || [ -L "$bin" ]; } && ! claude_binary_healthy "$bin"; then
+        echo "WARNING: $bin is broken (empty, dangling link, or no version output) — likely a truncated install."
+        echo "Reinstalling $NPM_PKG with --force..."
+        # `|| true` so a failed reinstall (offline, registry error) still
+        # reaches the ERROR below under main's `set -e`.
+        npm install -g --force "$NPM_PKG" || true
+        if ! claude_binary_healthy "$bin"; then
+            echo "ERROR: $bin is still broken after a forced reinstall."
+            echo "       Retry by hand: npm install -g --force $NPM_PKG"
+            return 1
+        fi
+        echo "Repaired: $("$bin" --version 2>/dev/null | head -1)"
+    fi
+}
+
+# Exit 0 when the claude binary at $1 is usable: a non-empty file (test -s
+# follows symlinks) whose `--version` prints a dotted version (N.N). A 0-byte
+# executable exits 0 and prints nothing, so presence + exit code are not
+# enough to tell a working install from a truncated one. stdin is /dev/null
+# and the call is bounded by `timeout` when available, so a corrupt binary
+# cannot hang the installer. Keep in sync with `claude-config doctor`
+# (ai/claude/aliases.sh), which applies the same check.
+claude_binary_healthy() {
+    [ -s "$1" ] || return 1
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 20 "$1" --version </dev/null 2>/dev/null | grep -Eq '[0-9]+\.[0-9]+'
+    else
+        "$1" --version </dev/null 2>/dev/null | grep -Eq '[0-9]+\.[0-9]+'
     fi
 }
 
@@ -263,8 +310,15 @@ main() {
 
     # Verify
     if command -v claude &> /dev/null; then
+        if ! claude_binary_healthy "$(command -v claude)"; then
+            echo "ERROR: $(command -v claude) (first claude on PATH) is broken (empty file or no version output)."
+            echo "       If it is the npm/brew copy: npm install -g --force $NPM_PKG  (macOS: brew reinstall --cask claude-code)."
+            echo "       If it is another copy (e.g. ~/.local/bin/claude), remove it so the canonical one wins."
+            echo "       'claude-config doctor' lists every claude on PATH."
+            exit 1
+        fi
         echo "Claude Code installed successfully!"
-        claude --version || true
+        claude --version </dev/null || true
         echo "Run 'claude' to authenticate and get started."
         echo "Tip: 'claude-config doctor' reports which binary is in use."
     else
