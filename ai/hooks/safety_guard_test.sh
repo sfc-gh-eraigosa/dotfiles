@@ -544,6 +544,186 @@ assert_exit 2 Bash $'rm ~/.config/g\\\nff/config.yaml'                 "a gff pa
 assert_exit 2 Bash $'gff s\\\net gss.approval-token.enabled false'     "s\\<nl>et (one word) is refused"
 assert_exit 2 Bash $'gff \\\n set gss.approval-token.enabled false'    "gff, backslash-newline, then set is refused"
 assert_exit 0 Bash "gh pr comment 1 --body \"the override is ~/.config/gff/config.yaml\"" "a gh comment naming the path is still fine"
+assert_exit 2 Bash "sed --in-place 's/true/false/' ~/.config/gff/config.yaml" "sed --in-place on the gff override file is refused"
+assert_exit 2 Bash "perl -pi -e 's/true/false/' ~/.config/gff/config.yaml" "perl -pi on the gff override file is refused"
+
+# The parsed reading (#474): `gss hooks argv` resolves what a text match
+# cannot. SG_GSS_BIN names a gss that has argv; else one is built from this
+# checkout when go is installed; else these cases are skipped.
+ARGV_DIR=""
+if [ -n "${SG_GSS_BIN:-}" ]; then
+    # a relative path would dangle once linked into a temp dir
+    sg_bin="$(cd "$(dirname "$SG_GSS_BIN")" 2> /dev/null && pwd)/$(basename "$SG_GSS_BIN")"
+    if [ ! -x "$sg_bin" ]; then
+        echo "FAIL: SG_GSS_BIN=$SG_GSS_BIN is not an executable"; echo FAIL >> "$RESULTS"
+    else
+        ARGV_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-argv.XXXXXX")"
+        ln -s "$sg_bin" "$ARGV_DIR/gss"
+    fi
+elif command -v go > /dev/null 2>&1; then
+    ARGV_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-argv.XXXXXX")"
+    (cd "$REPO_ROOT/sdk/gss" && go build -o "$ARGV_DIR/gss" .) > /dev/null 2>&1 || { rm -rf "$ARGV_DIR"; ARGV_DIR=""; }
+fi
+if [ -n "$ARGV_DIR" ] && printf 'gss push' | "$ARGV_DIR/gss" hooks argv --format=lines > /dev/null 2>&1; then
+  printf "#!/bin/sh\nexit 0\n" > "$ARGV_DIR/gff"; chmod +x "$ARGV_DIR/gff"   # the flag reads on
+  ( unset GSS_REQUIRE_APPROVAL; export PATH="$ARGV_DIR:$PATH" HOME="$ARGV_DIR/home"   # no approval token here
+    assert_exit 2 Bash $'x=\\\\\ngss push'                       'parsed: an even backslash pair does not join gss push to x='
+    assert_exit 2 Bash $'echo " # " && g\\\nss push'             'parsed: a quoted # does not stop g\<nl>ss joining'
+    assert_exit 2 Bash 'gss feature</dev/null pr --ready'        'parsed: a redirect glued to feature is gated'
+    assert_exit 2 Bash "\$'\\x67ss' push"                        "parsed: \$'\\x67ss' push is gated"
+    assert_exit 2 Bash 'bash -c "eval gss\ push"'                'parsed: gss push inside bash -c and eval is gated'
+    assert_exit 2 Bash $'bash <<EOF\ngss push\nEOF'              'parsed: gss push in a heredoc fed to bash is gated'
+    assert_exit 0 Bash $'cat <<EOF\ngss push\nEOF'               'parsed: gss push in a heredoc fed to cat is text'
+    assert_exit 2 Bash $'echo x\\\\\ngss push'                   'parsed: echo x\\ then gss push is gated'
+    assert_exit 2 Bash 'gss</dev/null push'                    'parsed: gss</dev/null push is gated'
+    assert_exit 0 Bash 'git log --grep "x" --oneline'            'parsed: plain git log runs' )
+  rm -f "$ARGV_DIR/gff"
+  ( export PATH="$ARGV_DIR:$PATH"
+    assert_exit 2 Bash $'echo \\\\\nrm ~/.config/gff/config.yaml' 'parsed: echo \\ then rm on the next line is refused'
+    assert_exit 2 Bash $'echo \\\\\ngff set gss.approval-token.enabled false' 'parsed: echo \\ then gff set is refused'
+    assert_exit 2 Bash $'echo " # " && g\\\nff set gss.approval-token.enabled false' 'parsed: a quoted # does not stop g\<nl>ff joining'
+    assert_exit 2 Bash 'rm ~/.config/gss/worktrees/../../gff/config.yaml' 'parsed: ../.. in the path is refused'
+    assert_exit 2 Bash '2>&1 gff set gss.approval-token.enabled false' 'parsed: a leading 2>&1 does not hide gff set'
+    assert_exit 2 Bash 'gff set>/dev/null gss.approval-token.enabled false' 'parsed: a redirect glued to set is refused'
+    assert_exit 2 Bash 'command gff</dev/null set gss.approval-token.enabled false' 'parsed: wrapped gff< set is refused'
+    assert_exit 2 Bash 'coproc gff set gss.approval-token.enabled false' 'parsed: coproc gff set is refused'
+    assert_exit 2 Bash "\$'\\x67ff' unset gss.approval-token.enabled" "parsed: \$'\\x67ff' unset is refused"
+    assert_exit 2 Bash 'yq -i</dev/null ".a = 1" ~/.config/gff/config.yaml' 'parsed: yq -i< on it is refused'
+    assert_exit 2 Bash 'X="a b" gff set gss.approval-token.enabled false' 'parsed: a quoted space in an assignment does not hide gff set'
+    assert_exit 2 Bash 'X="a cat" rm ~/.config/gff/config.yaml' 'parsed: a quoted "a cat" assignment is not the command'
+    assert_exit 2 Bash '2>> /dev/null gff set gss.approval-token.enabled false' 'parsed: a leading 2>> does not hide gff set'
+    assert_exit 2 Bash '<<< x gff set gss.approval-token.enabled false' 'parsed: a leading <<< does not hide gff set'
+    assert_exit 2 Bash 'env gff</dev/null set gss.approval-token.enabled false' 'parsed: env gff< set is refused'
+    # reviews of #475 (764972c4)
+    assert_exit 2 Bash $'bash <<\'EOF\'\nset -e\ngff set gss.approval-token.enabled false\nEOF' 'parsed: a multi-line heredoc fed to bash keeps its lines'
+    assert_exit 0 Bash $'bash <<\'EOF\'\nset -e\ncat ~/.config/gff/config.yaml\nEOF' 'parsed: a heredoc script that reads the gff file is fine'
+    assert_exit 2 Bash "bash -c \$'\\x67ff set gss.approval-token.enabled false # a/../../b'" 'parsed: a path in a bash -c script does not erase it'
+    assert_exit 2 Bash $'echo \\\\\ngff set gss.approval-token.enabled false\nfi' 'parsed: a later syntax error does not drop the lines before it'
+    assert_exit 2 Bash "\$'\\u0067ff' set gss.approval-token.enabled false" "parsed: \$'\\u0067ff' set is refused"
+    assert_exit 2 Bash "\$'gff\\0x' set gss.approval-token.enabled false" "parsed: \$'gff\\0x' (NUL ends it) is refused"
+    assert_exit 2 Bash "bash <<< \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: a here-string fed to bash is read'
+    assert_exit 2 Bash "env bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env bash -c is read'
+    assert_exit 2 Bash 'env "X=a cat" rm ~/.config/gff/config.yaml' 'parsed: a quoted space in an env arg is not the command'
+    # reviews of #475 (ffd41576)
+    assert_exit 2 Bash "rm ~/\$'\\x2e'config/a=b/../gff/config.yaml" 'parsed: an = inside a path is part of the path'
+    assert_exit 2 Bash 'rm ~/.config/"a b"/../gff/config.yaml' 'parsed: a space inside a path is part of the path'
+    assert_exit 2 Bash "ssh -oBatchMode=no host \$'\\x67ff' set gss.approval-token.enabled false" 'parsed: ssh -oK=v does not take the host'
+    assert_exit 2 Bash "sudo -uroot bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: sudo -uroot bash -c is read'
+    assert_exit 2 Bash "timeout -k5s 10 bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: timeout -k5s bash -c is read'
+    assert_exit 2 Bash "env - bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env - bash -c is read'
+    assert_exit 2 Bash "env --unset FOO bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env --unset FOO bash -c is read'
+    assert_exit 2 Bash "env -S \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env -S splits its string'
+    assert_exit 0 Bash $'bash ./setup.sh <<\'IN\'\ncat ~/.config/gff/config.yaml > /tmp/x\nIN' "parsed: a script file's stdin is its data"
+    # review of #475 (ae70eae4)
+    assert_exit 2 Bash $'bash /dev/stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: bash /dev/stdin runs its heredoc'
+    assert_exit 2 Bash $'sh /dev/fd/0 <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: sh /dev/fd/0 runs its heredoc'
+    assert_exit 0 Bash 'gh pr comment 1 --body "x > ~/.config/gff/config.yaml"' 'parsed: a > inside a message is text'
+    assert_exit 0 Bash 'git commit -m "gff set gss.approval-token.enabled false is refused"' 'parsed: a commit message naming gff set is text'
+    # agy review of #475 (ae70eae4)
+    assert_exit 2 Bash "bash -eo pipefail -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: bash -eo pipefail -c is read'
+    assert_exit 2 Bash "env -S 'bash -c' \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env -S prepends its words to the rest'
+    assert_exit 2 Bash "env -- FOO=bar bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env -- NAME=v bash -c is read'
+    assert_exit 2 Bash "sudo FOO=bar bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: sudo NAME=v bash -c is read'
+    assert_exit 2 Bash "xargs -i bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: xargs -i takes no next word'
+    assert_exit 2 Bash "echo ' # ' && bash -c \$'g\\"$'\n'"ff set gss.approval-token.enabled false'" "parsed: \$'g\\<nl>ff' keeps its backslash"
+    assert_exit 0 Bash $'echo ok\nfi' 'parsed: a benign command with a syntax error (argv exit 2) passes'
+    # reviews of #475 (dd5057e7)
+    assert_exit 2 Bash $'env -S bash <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: env -S bash reads its heredoc'
+    assert_exit 2 Bash "env -S '-i bash -c' \$'\\x67ff set gss.approval-token.enabled false'" "parsed: env -S's own env options"
+    assert_exit 2 Bash "env -S 'gff\\_set\\_gss.approval-token.enabled\\_false'" "parsed: env -S's \\_ is a space"
+    assert_exit 2 Bash "bash -oo pipefail errexit -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: bash -oo takes two option names'
+    assert_exit 2 Bash $'bash /dev/./stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: /dev/./stdin is stdin'
+    assert_exit 2 Bash $'source /dev/stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: source /dev/stdin reads its heredoc'
+    assert_exit 2 Bash $'(bash) <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: ( bash ) reads the heredoc around it'
+    assert_exit 2 Bash $'{ bash; } <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: { bash; } reads the heredoc around it'
+    # agy review of #475 (4421ae47)
+    assert_exit 2 Bash "env -S \$'X=; \\x67ff set gss.approval-token.enabled false'" 'parsed: env -S reads ; as a character'
+    assert_exit 2 Bash "env -S \$'X=( \\x67ff set gss.approval-token.enabled false'" 'parsed: env -S reads ( as a character'
+    assert_exit 2 Bash $'source -- /dev/stdin <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: source -- /dev/stdin reads its heredoc'
+    assert_exit 2 Bash $'eval bash <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: eval bash reads the heredoc'
+    assert_exit 2 Bash $'bash -c bash <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: bash -c bash reads the heredoc'
+    # review of #475 (d8ae013e): text piped into a shell
+    assert_exit 2 Bash "echo 'gff set gss.approval-token.enabled false' | bash" 'parsed: echo | bash runs the text'
+    assert_exit 2 Bash "printf '%s\\n' 'rm ~/.config/gff/config.yaml' | sh" 'parsed: printf | sh runs the text'
+    assert_exit 2 Bash $'cat <<\'E\' | bash\ngff set gss.approval-token.enabled false\nE' 'parsed: cat heredoc | bash runs the body'
+    assert_exit 0 Bash "echo 'gff set gss.approval-token.enabled false' | grep -c gff" 'parsed: echo | grep is not run'
+    assert_exit 0 Bash "echo 'gff set gss.approval-token.enabled false' | bash -c 'wc -l'" 'parsed: echo | bash -c reads data'
+    # agy review of #475 (d8ae013e)
+    assert_exit 2 Bash "{ :; } <<< \"\$(\$'\\x67ff' set gss.approval-token.enabled false)\"" "parsed: a \$(...) in a group's here-string runs"
+    assert_exit 2 Bash $'( : ) <<E\n$(gff set gss.approval-token.enabled false)\nE' "parsed: a \$(...) in a group's heredoc runs"
+    assert_exit 2 Bash "env -S \$'X=\\'\\\\\\'\\' \\x67ff set gss.approval-token.enabled false'" "parsed: env -S reads \\' inside '...'"
+    assert_exit 2 Bash "env -a x bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: env -a takes a value'
+    assert_exit 2 Bash $'bash <<-\'E\'\n\tg\\\n\tff set gss.approval-token.enabled false\nE' 'parsed: <<- strips the tabs before the inner shell joins lines'
+    # review of #475 (97da8f3c): the parse-once cache keys on stdin too
+    assert_exit 2 Bash $'sh -c sh </dev/null && sh -c sh <<\'E\'\ngff set gss.approval-token.enabled false\nE' 'parsed: a script seen first without stdin is read again with it'
+    assert_exit 2 Bash "eval bash </dev/null; eval bash <<< \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: eval bash with a here-string after one without'
+    # agy review of #475 (97da8f3c)
+    assert_exit 2 Bash "true | echo 'gff set gss.approval-token.enabled false' | bash" 'parsed: a 3-stage pipe into bash'
+    assert_exit 2 Bash "command echo 'gff set gss.approval-token.enabled false' | bash" 'parsed: command echo | bash'
+    assert_exit 2 Bash "printf '%s %s %s %s\\n' gff set gss.approval-token.enabled false | bash" 'parsed: printf fills its format'
+    assert_exit 2 Bash "printf '%b\\n' '\\0147ff set gss.approval-token.enabled false' | bash" 'parsed: printf %b decodes its argument'
+    assert_exit 2 Bash "env -S \$'-a 1=2 \\x67ff set gss.approval-token.enabled false'" 'parsed: env -S -a value is not an assignment'
+    assert_exit 2 Bash "env -S \$'\\x67ff\\rset\\rgss.approval-token.enabled\\rfalse'" 'parsed: env -S splits on CR'
+    # review of #475 (932acf3d)
+    assert_exit 2 Bash "printf '\\x67ff set gss.approval-token.enabled false' | bash" 'parsed: printf decodes \x in its format'
+    assert_exit 2 Bash "printf 'gff\\x20set gss.approval-token.enabled false' | bash" 'parsed: printf decodes \x20 between words'
+    assert_exit 2 Bash "printf '%.3s set gss.approval-token.enabled false' gffxyz | bash" 'parsed: printf applies precision'
+    assert_exit 2 Bash "echo 'gff set gss.approval-token.enabled false' | cat | bash" 'parsed: cat passes the text on'
+    assert_exit 2 Bash "echo 'gff set gss.approval-token.enabled false' | tee log | bash" 'parsed: tee passes the text on'
+    # agy review of #475 (932acf3d)
+    assert_exit 2 Bash "echo -e 'echo \\\\c\\n\\0147ff set gss.approval-token.enabled false' | bash" 'parsed: echo -e \\c is a literal \c'
+    assert_exit 2 Bash "echo -e '\\x00\\n\\x67ff set gss.approval-token.enabled false' | bash" 'parsed: echo -e goes on after a NUL'
+    assert_exit 2 Bash "printf '%*s%s\\n' 0 g 'ff set gss.approval-token.enabled false' | bash" 'parsed: printf * takes an argument'
+    assert_exit 2 Bash "printf '%c%s\\n' gx 'ff set gss.approval-token.enabled false' | bash" 'parsed: printf %c prints one byte'
+    assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | env -S bash" 'parsed: env -S bash reads the pipe'
+    assert_exit 2 Bash $'cat -u <<\'E\' | bash\ngff set gss.approval-token.enabled false\nE' 'parsed: cat -u passes the heredoc'
+    # review of #475 (a8f60ff7)
+    assert_exit 2 Bash "printf '%b' '\\147ff set gss.approval-token.enabled false' | bash" 'parsed: printf %b reads \\147 as octal'
+    # agy review of #475 (a8f60ff7)
+    assert_exit 2 Bash "echo \$'-\\n\\x67ff set gss.approval-token.enabled false' | bash" 'parsed: echo prints a - argument'
+    assert_exit 2 Bash "printf '%s%1s%s\\n' \$'\\x67ff' '' 'set gss.approval-token.enabled false' | bash" 'parsed: printf pads to its width'
+    assert_exit 2 Bash "printf '\\\"\\x67ff\\\" set gss.approval-token.enabled false\\n' | bash" 'parsed: printf decodes \" in its format'
+    assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | cat 2>/dev/null | bash" 'parsed: cat 2>/dev/null passes the text on'
+    assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | cat -s | bash" 'parsed: cat -s passes the text on'
+    # agy review of #475 (a8f60ff7): padding that runs out argv's work
+    # budget is refused, not judged by the lines before it
+    pad="printf %s$(printf " ''%.0s" $(seq 30000))"
+    assert_exit 2 Bash "$pad | bash; \$'\\x67ff' set gss.approval-token.enabled false" 'parsed: padding past the work budget is refused'
+    assert_exit 2 Bash "$pad; echo hi" 'parsed: any command past the work budget is refused'
+    # agy review of #475 (3f44d4f7)
+    assert_exit 2 Bash "printf '%1048576s%b\\n' '' '\\147ff set gss.approval-token.enabled false' | bash" 'parsed: printf past its cap is refused'
+    assert_exit 2 Bash "printf '%b%s' 'rm ~/.config/\\147ff/config.yaml\\c' '/../../../tmp/x' | bash" 'parsed: \c in %b ends printf'
+    assert_exit 2 Bash "tee /dev/null <<< \$'\\x67ff set gss.approval-token.enabled false' | bash" 'parsed: tee passes its here-string'
+    assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | cat /dev/stdin | bash" 'parsed: cat /dev/stdin passes the text'
+    assert_exit 2 Bash "echo \$'\\x67ff set gss.approval-token.enabled false' | { bash; }" 'parsed: a group running bash reads the pipe'
+    assert_exit 2 Bash $'bash /proc/thread-self/fd/0 <<\'E\'\n$\'\\x67ff\' set gss.approval-token.enabled false\nE' 'parsed: /proc/thread-self/fd/0 is stdin'
+    assert_exit 2 Bash "sudo -R / bash -c \$'\\x67ff set gss.approval-token.enabled false'" 'parsed: sudo -R takes a value' )
+  # a gss too old for --format: argv exits 1, the text check stands alone and
+  # whatever it printed is dropped
+  OLD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sg-oldgss.XXXXXX")"
+  printf '#!/bin/sh\necho "gff set gss.approval-token.enabled false"\necho "unknown flag: --format" >&2\nexit 1\n' > "$OLD_DIR/gss"; chmod +x "$OLD_DIR/gss"
+  printf '#!/bin/sh\nexit 0\n' > "$OLD_DIR/gff"; chmod +x "$OLD_DIR/gff"
+  ( unset GSS_REQUIRE_APPROVAL; export PATH="$OLD_DIR:$PATH" HOME="$OLD_DIR/home"
+    assert_exit 2 Bash 'gff set gss.approval-token.enabled false' 'old gss: the text check still refuses gff set'
+    assert_exit 0 Bash 'echo hello' 'old gss: a benign command passes' )
+  # an argv that hangs is cut off at 5 s and its output dropped; the text
+  # check still runs (review of #475, 4421ae47)
+  if command -v timeout > /dev/null 2>&1; then
+    printf '#!/bin/sh\necho "gff set gss.approval-token.enabled false"\nsleep 30\n' > "$OLD_DIR/gss"
+    ( unset GSS_REQUIRE_APPROVAL; export PATH="$OLD_DIR:$PATH" HOME="$OLD_DIR/home"
+      t0=$(date +%s)
+      assert_exit 0 Bash 'echo hello' 'slow argv: cut off, a benign command passes'
+      if [ $(($(date +%s) - t0)) -le 10 ]; then
+        echo "PASS: slow argv: the hook finished within 10 s"; echo PASS >> "$RESULTS"
+      else
+        echo "FAIL: slow argv: the hook took over 10 s"; echo FAIL >> "$RESULTS"
+      fi )
+  fi
+  rm -rf "$OLD_DIR"
+else
+  echo "SKIP: no gss with hooks argv (set SG_GSS_BIN, or install go): the parsed cases did not run"
+fi
+[ -z "$ARGV_DIR" ] || rm -rf "$ARGV_DIR"
 
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"

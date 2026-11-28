@@ -290,7 +290,44 @@ gss_publish_verb() {
       || { [[ "$t" =~ ${GSS_VERB_ANY}feature[[:space:]]+pr${GSS_END} ]] \
            && [[ "$t" =~ (^|[[:space:]])--ready(=|${GSS_END}) ]]; }
 }
-if gss_publish_verb "$CMD_GSS" && gss_token_required; then
+# The command as bash parses it (#474): `gss hooks argv` prints one line per
+# simple command, with quotes, escapes, backslash-newlines and comments
+# resolved, $'...' decoded, paths cleaned, redirections glued to their
+# targets, and the strings given to bash -c, eval, ssh or a heredoc fed to a
+# shell parsed again. Rules 10 and 10b check these lines as well as the text,
+# so the parse only adds refusals. On a syntax error argv exits 2 after the
+# lines of the statements before it, which bash would run, and those are
+# kept. A command too large to read through (over 1 MiB or past argv's work
+# budget, exit 3) is refused: padding must not hide a later line.
+# With no gss on PATH, a gss too old to know argv (it rejects --format,
+# exit 1), or an argv that runs past 5 s (timeout, exit 124: the hook must
+# finish well inside its own timeout, or the command runs unchecked),
+# CMD_PARSED is empty and the text match stands alone.
+CMD_PARSED=""
+if command -v gss > /dev/null 2>&1; then
+    argv_rc=0
+    if command -v timeout > /dev/null 2>&1; then
+        CMD_PARSED="$(printf '%s' "$CMD" | timeout 5 gss hooks argv --format=lines 2> /dev/null)" || argv_rc=$?
+    else
+        CMD_PARSED="$(printf '%s' "$CMD" | gss hooks argv --format=lines 2> /dev/null)" || argv_rc=$?
+    fi
+    case $argv_rc in
+        0 | 2) ;;
+        # too large to read through: judging only part of it would let
+        # padding hide a later line
+        3) deny "command too large for the safety check to read; split it into smaller commands (#474)" ;;
+        *) CMD_PARSED="" ;;
+    esac
+fi
+gss_publish_parsed() {
+    local l
+    [ -n "$CMD_PARSED" ] || return 1
+    while IFS= read -r l; do
+        gss_publish_verb "$l" && return 0
+    done <<< "$CMD_PARSED"
+    return 1
+}
+if { gss_publish_verb "$CMD_GSS" || gss_publish_parsed; } && gss_token_required; then
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
         deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."
@@ -329,9 +366,11 @@ fi
 # the flag or a path passes. That reading is used only for a short command
 # with no backslash, $'...', $( or backtick, where bash's quoting is plain;
 # any other command is split strictly, quotes and all, as if it were code.
-# It catches mistakes and the plain spellings. It is a text match, so xargs,
-# a variable holding the path, removing a parent dir, or the Write/Edit
-# tools get past it. A message that names a gff path next to a backtick or
+# The same checks also run on CMD_PARSED (#474), one simple command per line
+# as bash parses it, which follows escapes, $'...', continuations, comments,
+# quoted spaces, redirect spellings, ../.. and bash -c / eval / ssh strings.
+# Neither reading follows xargs, a variable holding the path, removing a
+# parent dir, or the Write/Edit tools. A message that names a gff path next to a backtick or
 # backslash is refused; pass it through a heredoc (-F - <<EOF), which is
 # never checked as code.
 GFF_DIRS='[.]config/gff|[.]local/share/gff'
@@ -400,7 +439,7 @@ gff_guard_text() {
                     [[ "${words[n]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || break
                     [[ "${words[n]}" =~ $GFF_DIRS ]] && return 0 ;;
             esac
-            prev="${words[n]}"; n=$((n + 1))
+            prev="${words[n]:-}"; n=$((n + 1))
         done
         w="${words[n]:-}"
         # a gff dir path is never a command, and never the gff reader
@@ -438,10 +477,11 @@ gff_guard_text() {
             yq) [[ "$seg" =~ [[:space:]](-[A-Za-z]*i[A-Za-z]*|--inplace|--in-place)([[:space:]]|=|$) ]] && return 0 ;;
             *) return 0 ;;
         esac
-    done < <(gff_cmd_parts "$1" "$2")
+    done < <(if [ "${3:-}" = parsed ]; then printf '%s\n' "$1"; else gff_cmd_parts "$1" "$2"; fi)
     return 1
 }
-if gff_guard_text "$CMD_JOINED" "$CMD_GSS"; then
+# $3 = parsed: $1 is already one simple command per line (CMD_PARSED).
+if gff_guard_text "$CMD_JOINED" "$CMD_GSS" || gff_guard_text "$CMD_PARSED" "$CMD_PARSED" parsed; then
     deny "gss.approval-token.enabled is the operator's switch, like the approval token: an assistant never sets, unsets or edits it, nor changes ~/.config/gff. Reading is fine (cat, grep, diff, jq, ls; save a copy with \`cat ~/.config/gff/config.yaml > /tmp/x\`). To change the flag, ask the operator to run it themselves (\`! gff set gss.approval-token.enabled <true|false>\`)."
 fi
 
