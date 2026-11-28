@@ -54,6 +54,12 @@ install_via_brew() {
     if brew list --cask claude-code &> /dev/null; then
         echo "claude-code cask already installed. Checking for updates..."
         brew upgrade --cask claude-code 2>/dev/null || true
+        # `brew upgrade` is a no-op when current, so repair a truncated binary.
+        local bp; bp="$(brew --prefix 2>/dev/null)/bin/claude"
+        if [ -e "$bp" ] && ! claude_binary_healthy "$bp"; then
+            echo "WARNING: $bp is broken (empty file or no version output). Reinstalling the cask..."
+            brew reinstall --cask claude-code || true
+        fi
     else
         echo "Installing claude-code cask..."
         brew install --cask claude-code || {
@@ -94,6 +100,32 @@ install_via_npm() {
         echo "Installing $NPM_PKG globally via npm..."
         npm install -g "$NPM_PKG"
     fi
+
+    # `npm ls` only reads package metadata, and `npm update` is a no-op when
+    # the version is current — so a truncated install (every file 0 bytes,
+    # left by a crash/`wsl --shutdown` before the writes were flushed) would
+    # survive every re-run. Check the binary itself and force a reinstall.
+    local prefix; prefix="$(npm config get prefix 2>/dev/null || true)"
+    local bin="$prefix/bin/claude"
+    if [ -n "$prefix" ] && [ -e "$bin" ] && ! claude_binary_healthy "$bin"; then
+        echo "WARNING: $bin is broken (empty file or no version output) — likely a truncated install."
+        echo "Reinstalling $NPM_PKG with --force..."
+        npm install -g --force "$NPM_PKG"
+        if ! claude_binary_healthy "$bin"; then
+            echo "ERROR: $bin is still broken after a forced reinstall."
+            return 1
+        fi
+        echo "Repaired: $("$bin" --version 2>/dev/null | head -1)"
+    fi
+}
+
+# Exit 0 when the claude binary at $1 is usable: a non-empty file (test -s
+# follows symlinks) whose `--version` prints a version number. A 0-byte
+# executable exits 0 and prints nothing, so presence + exit code are not
+# enough to tell a working install from a truncated one.
+claude_binary_healthy() {
+    [ -s "$1" ] || return 1
+    "$1" --version 2>/dev/null | grep -q '[0-9]'
 }
 
 # Resolve the path to the dotfiles-orchestrated ("canonical") claude binary —
@@ -263,8 +295,14 @@ main() {
 
     # Verify
     if command -v claude &> /dev/null; then
+        if ! claude_binary_healthy "$(command -v claude)"; then
+            echo "ERROR: $(command -v claude) is broken (empty file or no version output)."
+            echo "       Reinstall it: npm install -g --force $NPM_PKG  (macOS: brew reinstall --cask claude-code)"
+            echo "       'claude-config doctor' shows which binary is in use."
+            exit 1
+        fi
         echo "Claude Code installed successfully!"
-        claude --version || true
+        claude --version
         echo "Run 'claude' to authenticate and get started."
         echo "Tip: 'claude-config doctor' reports which binary is in use."
     else

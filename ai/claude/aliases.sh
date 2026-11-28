@@ -23,7 +23,8 @@
 #                     claude-config yolo   on|off   # --dangerously-skip-permissions
 #                     claude-config remote on|off   # --remote-control on interactive sessions
 #                     claude-config doctor          # report the installed claude binary,
-#                                                   # warn if more than one is on PATH
+#                                                   # warn if more than one is on PATH or
+#                                                   # it is empty/broken (truncated install)
 #
 # Config is expressed as sentinel files under $XDG_CONFIG_HOME/claude
 # (defaults to ~/.config/claude/), kept out of ~/.claude/ (owned by Claude Code).
@@ -153,13 +154,32 @@ claude-config() {
             echo "  command claude -> ${claude_resolved:-<not found>}"
             echo "  on PATH ($claude_n):"
             printf '%s\n' "$claude_all" | sed '/^$/d; s/^/    /'
+            claude_rc=0
+            # A truncated install (every file 0 bytes, e.g. after a crash or
+            # `wsl --shutdown` mid-install) is still "executable", exits 0 and
+            # prints nothing, so `claude` silently does nothing. test -s
+            # follows symlinks to the real file.
+            if [ -n "$claude_resolved" ]; then
+                if [ ! -s "$claude_resolved" ]; then
+                    echo "  WARNING: $claude_resolved is an EMPTY file (truncated install)."
+                    claude_rc=1
+                elif ! "$claude_resolved" --version 2>/dev/null | grep -q '[0-9]'; then
+                    echo "  WARNING: $claude_resolved --version printed no version (broken install)."
+                    claude_rc=1
+                fi
+                if [ "$claude_rc" -ne 0 ]; then
+                    echo "  Fix: npm install -g --force @anthropic-ai/claude-code"
+                    echo "       (macOS brew: brew reinstall --cask claude-code), or re-run install.sh."
+                fi
+            fi
             if [ "$claude_n" -gt 1 ]; then
                 echo "  WARNING: more than one claude binary is installed. The dotfiles"
                 echo "  installer (claude_install.sh, run by install.sh) keeps ONE canonical"
                 echo "  binary (npm on Linux/WSL, brew cask on macOS) and removes the"
                 echo "  non-orchestrated native install. Re-run install.sh to consolidate."
-                return 1
+                claude_rc=1
             fi
+            return "$claude_rc"
             ;;
         ""|status)
             [ -f "$CLAUDE_YOLO_FILE" ] && yolo_state="ON" || yolo_state="OFF"

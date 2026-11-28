@@ -84,6 +84,31 @@ assert_in_subshell "re-points a stale link under a custom NVM_DIR" \
 assert_in_subshell "keeps a relative link into the current nvm node" \
     "$mk_nvm ln -s ../../.nvm/versions/node/v2.0.0/bin/claude \"\$H/.local/bin/claude\"; export CLAUDE_CANONICAL_BIN=\"\$new\"; . '$SCRIPT'; cleanup_conflicting_installs >/dev/null 2>&1; [ \"\$(readlink \"\$H/.local/bin/claude\")\" = ../../.nvm/versions/node/v2.0.0/bin/claude ]"
 
+# === Truncated-install detection + repair ===
+# claude_binary_healthy: empty file / symlink to empty / no version => unhealthy.
+assert_in_subshell "claude_binary_healthy rejects an empty binary" \
+    "H=\$(mktemp -d); : > \"\$H/claude\"; chmod +x \"\$H/claude\"; . '$SCRIPT'; ! claude_binary_healthy \"\$H/claude\""
+assert_in_subshell "claude_binary_healthy rejects a symlink to an empty binary" \
+    "H=\$(mktemp -d); : > \"\$H/claude.exe\"; chmod +x \"\$H/claude.exe\"; ln -s \"\$H/claude.exe\" \"\$H/claude\"; . '$SCRIPT'; ! claude_binary_healthy \"\$H/claude\""
+assert_in_subshell "claude_binary_healthy rejects a binary with no version output" \
+    "H=\$(mktemp -d); printf '#!/bin/sh\nexit 0\n' > \"\$H/claude\"; chmod +x \"\$H/claude\"; . '$SCRIPT'; ! claude_binary_healthy \"\$H/claude\""
+assert_in_subshell "claude_binary_healthy accepts a binary that prints a version" \
+    "H=\$(mktemp -d); printf '#!/bin/sh\necho 2.1.332 Claude Code\n' > \"\$H/claude\"; chmod +x \"\$H/claude\"; . '$SCRIPT'; claude_binary_healthy \"\$H/claude\""
+
+# install_via_npm with a mocked npm: package "already installed" (npm ls ok,
+# npm update a no-op) but the binary is 0 bytes => forced reinstall repairs it.
+mk_npm='H=$(mktemp -d); export HOME="$H"; P="$H/prefix"; mkdir -p "$P/bin"; export P LOG="$H/npm.log";
+  : > "$P/bin/claude"; chmod +x "$P/bin/claude";
+  npm_allow_scripts() { :; };'
+npm_fixes='npm() { echo "$*" >> "$LOG"; case "$*" in "config get prefix") echo "$P" ;; *--force*) printf "#!/bin/sh\necho 9.9.9 Claude Code\n" > "$P/bin/claude" ;; esac; return 0; };'
+npm_noop='npm() { echo "$*" >> "$LOG"; case "$*" in "config get prefix") echo "$P" ;; esac; return 0; };'
+assert_in_subshell "install_via_npm force-reinstalls a truncated (0-byte) binary" \
+    "$mk_npm . '$SCRIPT'; $npm_fixes install_via_npm >/dev/null 2>&1 && grep -q -- 'install -g --force' \"\$LOG\" && claude_binary_healthy \"\$P/bin/claude\""
+assert_in_subshell "install_via_npm fails when the forced reinstall does not repair it" \
+    "$mk_npm . '$SCRIPT'; $npm_noop ! install_via_npm >/dev/null 2>&1"
+assert_in_subshell "install_via_npm leaves a healthy binary alone (no --force)" \
+    "$mk_npm printf '#!/bin/sh\necho 9.9.9\n' > \"\$P/bin/claude\"; . '$SCRIPT'; $npm_fixes install_via_npm >/dev/null 2>&1 && ! grep -q -- '--force' \"\$LOG\""
+
 # 5h) version_lt compares numerically per field (10 > 9); equal is not lower.
 assert_in_subshell "version_lt compares dotted versions numerically" \
     ". '$SCRIPT'; version_lt 24.9.0 24.10.0 && ! version_lt 24.10.0 24.9.0 && ! version_lt 24.18.0 24.18.0"
