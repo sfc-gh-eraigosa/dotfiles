@@ -5,7 +5,7 @@ namespace: com.github.sfc-gh-eraigosa.dotfiles
 sets:
   - area: install
     features:
-      # --- system (6) ---
+      # --- system (7) ---
       - path: install.system.wsl-interop
         description: Runs the wsl_interop_binfmt.sh block that keeps the WSLInterop binfmt registration alive.
         boolDefault: true
@@ -23,6 +23,9 @@ sets:
         boolDefault: true
       - path: install.system.unattended-upgrades
         description: "Runs setup_unattended_upgrades.sh: on an apt host with systemd, installs unattended-upgrades, turns on APT::Periodic (daily index refresh + unattended security upgrades, the distro's default origins) and enables the two apt timers. SKIPs elsewhere. Default on; gff set install.system.unattended-upgrades false leaves a host alone."
+        boolDefault: true
+      - path: install.system.tuning
+        description: "Runs setup_system_tuning.sh: on a Linux host with systemd, caps the persistent journal at SystemMaxUse=2G (/etc/systemd/journald.conf.d/10-dotfiles-tuning.conf, journald restarted, journal vacuumed to the cap) and, on an apt host, empties /var/cache/apt weekly (APT::Periodic::CleanInterval \"7\" in /etc/apt/apt.conf.d/52dotfiles-tuning). SKIPs elsewhere. Default on; ST_JOURNAL_MAX moves the cap; gff set install.system.tuning false leaves a host alone."
         boolDefault: true
       # --- shell (3) ---
       - path: install.shell.profiles

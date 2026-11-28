@@ -1178,6 +1178,13 @@ if gff_on install.system.unattended-upgrades; then
     echo "WARNING: unattended-upgrades setup reported problems; continuing."
 else gff_skip_msg install.system.unattended-upgrades; fi
 
+# Disk tuning (default on): Linux hosts with systemd cap the journal at 2G and,
+# on apt hosts, empty /var/cache/apt weekly. SKIPs elsewhere.
+if gff_on install.system.tuning; then
+  "${BASE_DIR}/opt/scripts/system/setup_system_tuning.sh" ||
+    echo "WARNING: system tuning reported problems; continuing."
+else gff_skip_msg install.system.tuning; fi
+
 if gff_on install.system.gitrepos; then
   if [ -f "${HOME}/.gitrepos" ] ; then
     cd "${HOME}" || exit 1
