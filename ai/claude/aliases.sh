@@ -163,7 +163,13 @@ claude-config() {
                 if [ ! -s "$claude_resolved" ]; then
                     echo "  WARNING: $claude_resolved is an EMPTY file (truncated install)."
                     claude_rc=1
-                elif ! "$claude_resolved" --version 2>/dev/null | grep -q '[0-9]'; then
+                # Same check as claude_binary_healthy in claude_install.sh:
+                # a dotted version, stdin closed, bounded when timeout exists.
+                elif ! { if command -v timeout >/dev/null 2>&1; then
+                             timeout 20 "$claude_resolved" --version </dev/null 2>/dev/null
+                         else
+                             "$claude_resolved" --version </dev/null 2>/dev/null
+                         fi; } | grep -Eq '[0-9]+\.[0-9]+'; then
                     echo "  WARNING: $claude_resolved --version printed no version (broken install)."
                     claude_rc=1
                 fi

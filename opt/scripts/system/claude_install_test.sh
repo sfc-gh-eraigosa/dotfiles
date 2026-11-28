@@ -98,14 +98,23 @@ assert_in_subshell "claude_binary_healthy accepts a binary that prints a version
 # install_via_npm with a mocked npm: package "already installed" (npm ls ok,
 # npm update a no-op) but the binary is 0 bytes => forced reinstall repairs it.
 mk_npm='H=$(mktemp -d); export HOME="$H"; P="$H/prefix"; mkdir -p "$P/bin"; export P LOG="$H/npm.log";
-  : > "$P/bin/claude"; chmod +x "$P/bin/claude";
-  npm_allow_scripts() { :; };'
-npm_fixes='npm() { echo "$*" >> "$LOG"; case "$*" in "config get prefix") echo "$P" ;; *--force*) printf "#!/bin/sh\necho 9.9.9 Claude Code\n" > "$P/bin/claude" ;; esac; return 0; };'
-npm_noop='npm() { echo "$*" >> "$LOG"; case "$*" in "config get prefix") echo "$P" ;; esac; return 0; };'
+  : > "$P/bin/claude"; chmod +x "$P/bin/claude";'
+# Stubs are defined AFTER sourcing the script (which sources the real
+# npm_allow_scripts helper and would otherwise replace them).
+npm_fixes='npm_allow_scripts() { :; }; npm() { echo "$*" >> "$LOG"; case "$*" in "config get prefix") echo "$P" ;; *--force*) printf "#!/bin/sh\necho 9.9.9 Claude Code\n" > "$P/bin/claude" ;; esac; return 0; };'
+npm_noop='npm_allow_scripts() { :; }; npm() { echo "$*" >> "$LOG"; case "$*" in "config get prefix") echo "$P" ;; esac; return 0; };'
 assert_in_subshell "install_via_npm force-reinstalls a truncated (0-byte) binary" \
     "$mk_npm . '$SCRIPT'; $npm_fixes install_via_npm >/dev/null 2>&1 && grep -q -- 'install -g --force' \"\$LOG\" && claude_binary_healthy \"\$P/bin/claude\""
 assert_in_subshell "install_via_npm fails when the forced reinstall does not repair it" \
     "$mk_npm . '$SCRIPT'; $npm_noop ! install_via_npm >/dev/null 2>&1"
+assert_in_subshell "install_via_npm repairs a dangling bin/claude link" \
+    "$mk_npm rm -f \"\$P/bin/claude\"; ln -s \"\$P/missing/claude.exe\" \"\$P/bin/claude\"; . '$SCRIPT'; npm_allow_scripts() { :; }; npm() { echo \"\$*\" >> \"\$LOG\"; case \"\$*\" in 'config get prefix') echo \"\$P\" ;; *--force*) rm -f \"\$P/bin/claude\"; printf '#!/bin/sh\necho 9.9.9\n' > \"\$P/bin/claude\"; chmod +x \"\$P/bin/claude\" ;; esac; return 0; }; install_via_npm >/dev/null 2>&1 && grep -q -- 'install -g --force' \"\$LOG\""
+assert_in_subshell "install_via_npm reports ERROR when the forced reinstall itself fails (set -e)" \
+    "$mk_npm . '$SCRIPT'; npm_allow_scripts() { :; }; npm() { case \"\$*\" in 'config get prefix') echo \"\$P\" ;; *--force*) return 1 ;; esac; return 0; }; out=\$(set -e; install_via_npm 2>&1); rc=\$?; [ \$rc -ne 0 ] && printf '%s' \"\$out\" | grep -q 'still broken'"
+assert_in_subshell "claude_binary_healthy rejects digit-only non-version output" \
+    "H=\$(mktemp -d); printf '#!/bin/sh\necho Error code 1\n' > \"\$H/claude\"; chmod +x \"\$H/claude\"; . '$SCRIPT'; ! claude_binary_healthy \"\$H/claude\""
+assert_in_subshell "claude_binary_healthy does not hang on a binary reading stdin" \
+    "H=\$(mktemp -d); printf '#!/bin/sh\ncat\n' > \"\$H/claude\"; chmod +x \"\$H/claude\"; . '$SCRIPT'; ! claude_binary_healthy \"\$H/claude\""
 assert_in_subshell "install_via_npm leaves a healthy binary alone (no --force)" \
     "$mk_npm printf '#!/bin/sh\necho 9.9.9\n' > \"\$P/bin/claude\"; . '$SCRIPT'; $npm_fixes install_via_npm >/dev/null 2>&1 && ! grep -q -- '--force' \"\$LOG\""
 
